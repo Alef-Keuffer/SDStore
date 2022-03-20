@@ -1,3 +1,0 @@
-/home/useralef/Documents/uminho/sistemasOperativos/sdstore-armazenamento-eficiente-e-seguro-de-ficheiros/SDStore/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/useralef/Documents/uminho/sistemasOperativos/sdstore-armazenamento-eficiente-e-seguro-de-ficheiros/SDStore/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/useralef/Documents/uminho/sistemasOperativos/sdstore-armazenamento-eficiente-e-seguro-de-ficheiros/SDStore/cmake-build-debug/CMakeFiles/SDStore.dir
