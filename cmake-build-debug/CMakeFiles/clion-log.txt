@@ -1,0 +1,4 @@
+/home/useralef/.local/share/JetBrains/Toolbox/apps/CLion/ch-0/213.6777.58/bin/cmake/linux/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/useralef/.local/share/JetBrains/Toolbox/apps/CLion/ch-0/213.6777.58/bin/ninja/linux/ninja -G Ninja /home/useralef/Documents/uminho/sistemasOperativos/sdstore-armazenamento-eficiente-e-seguro-de-ficheiros/SDStore
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/useralef/Documents/uminho/sistemasOperativos/sdstore-armazenamento-eficiente-e-seguro-de-ficheiros/SDStore/cmake-build-debug
