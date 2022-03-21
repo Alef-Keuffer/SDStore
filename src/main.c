@@ -65,7 +65,7 @@ deactivate Server
 
 
 
-void transformation(const char *transf, const char *src, const char *dst) {
+void transformation_apply(const char *transf, const char *src, const char *dst) {
 #include <string.h>
 
     char file[50] = "bin/sdstore-transformations/";
