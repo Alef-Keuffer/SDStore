@@ -1,11 +1,4 @@
-#include <stdio.h>
-
-/*!
-
-@mainpage Example use
-
-@startuml{myimage.svg} "Example use" width=5cm
-
+@startuml myimage.svg
 skinparam Shadowing false
 skinparam defaultFontName monospace
 
@@ -46,13 +39,4 @@ deactivate Client
 
 Server <-? : SIGTERM
 deactivate Server
-
-
 @enduml
- *
- */
-
-int main() {
-    printf("Hello, World!\n");
-    return 0;
-}

@@ -25,6 +25,7 @@
 var NAVTREE =
 [
   [ "SDStore", "index.html", [
+    [ "Example use", "index.html", null ],
     [ "Files", "files.html", [
       [ "File List", "files.html", "files_dup" ],
       [ "Globals", "globals.html", [
