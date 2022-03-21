@@ -102,22 +102,7 @@ const int FIFO_PERMISSION = 0666;
 
 
 
-ssize_t rread(int fd, void *buf, ssize_t nbytes) {
-    ssize_t ret;
-    ssize_t nread = 0;
-    while (nbytes != 0 && (ret = read(fd, buf, nbytes)) != 0) {
-        if (ret == -1) {
-            if (errno == EINTR)
-                continue;
-            perror("read");
-            break;
-        }
-        nread += ret;
-        nbytes -= ret;
-        buf += ret;
-    }
-    return nread;
-}
+
 
 int oopen(const char *file, int oflag) {
     int fd = open(file, oflag);
