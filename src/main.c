@@ -5,6 +5,7 @@
 #include <stdlib.h> /*for exit*/
 #include <errno.h>
 
+#include "util.h"
 #include "env.h"
 
 /*!
@@ -99,20 +100,7 @@ typedef struct task {
 const char *FIFO_SERVER_WRITE = "fromServer";
 const int FIFO_PERMISSION = 0666;
 
-int fifo_create_write() {
-    if (access(FIFO_SERVER_WRITE, F_OK) == -1) { /*check if fifo already exists*/
-        if (mkfifo(FIFO_SERVER_WRITE, FIFO_PERMISSION)) {
-            perror("fifo_create_write failed at mkfifo");
-            exit(EXIT_FAILURE);
-        }
-    }
-    int fd = open(FIFO_SERVER_WRITE, O_WRONLY);
-    if (fd == -1) {
-        perror("fifo_create_write failed at opening the fifo");
-        exit(EXIT_FAILURE);
-    }
-    return fd;
-}
+
 
 ssize_t rread(int fd, void *buf, ssize_t nbytes) {
     ssize_t ret;
