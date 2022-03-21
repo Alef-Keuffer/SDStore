@@ -37,3 +37,17 @@ ssize_t rread(int fd, void *buf, ssize_t nbytes) {
     }
     return nread;
 }
+
+int oopen(const char *file, int oflag) {
+    int fd = open(file, oflag);
+    if (fd == -1)
+        perror("oopen");
+    return fd;
+}
+
+int cclose(int fd) {
+    int status = close(fd);
+    if (status)
+        perror("cclose");
+    return status;
+}

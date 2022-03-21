@@ -79,8 +79,6 @@ void transformation(const char *transf, const char *src, const char *dst) {
         exit(EXIT_FAILURE);
     }
 }
-
-
 //! @} end of group transformations
 
 typedef enum status {
@@ -104,19 +102,7 @@ const int FIFO_PERMISSION = 0666;
 
 
 
-int oopen(const char *file, int oflag) {
-    int fd = open(file, oflag);
-    if (fd == -1)
-        perror("oopen");
-    return fd;
-}
 
-int cclose(int fd) {
-    int status = close(fd);
-    if (status)
-        perror("cclose");
-    return status;
-}
 
 
 
