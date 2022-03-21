@@ -65,63 +65,59 @@ deactivate Server
 
 
 
-void transformation_apply(const char *transf, const char *src, const char *dst) {
+void transformation_apply (const char *transf, const char *src, const char *dst)
+{
 #include <string.h>
 
-    char file[50] = "bin/sdstore-transformations/";
-    strcat(file, transf);
+  char file[50] = "bin/sdstore-transformations/";
+  strcat (file, transf);
 
-    pid_t pid;
-    if ((pid = fork()) == 0)
-        execlp(file, transf, src, dst, NULL);
-    else if (pid < 0) {
-        perror("transformation failed forking");
-        exit(EXIT_FAILURE);
+  pid_t pid;
+  if ((pid = fork ()) == 0)
+    execlp (file, transf, src, dst, NULL);
+  else if (pid < 0)
+    {
+      perror ("transformation failed forking");
+      exit (EXIT_FAILURE);
     }
 }
 //! @} end of group transformations
 
 typedef enum status {
-    pending,
-    processing,
-    finished
+  pending,
+  processing,
+  finished
 } STATUS;
 
 typedef struct task {
-    unsigned long long task_id;
-    unsigned char priority; //! 0 to 5
-    const char* src;
-    const char* dst;
-    TRANSFORMATION *transformations;
+  unsigned long long task_id;
+  unsigned char priority; //! 0 to 5
+  const char *src;
+  const char *dst;
+  TRANSFORMATION *transformations;
 } *TASK;
 
 const char *FIFO_SERVER_WRITE = "fromServer";
 const int FIFO_PERMISSION = 0666;
 
+void load_config (const char *config, ENV env)
+{
+  fprintf (stderr, "loading config...");
+  const unsigned int BUF_SIZE = 8192;
+  char buf[BUF_SIZE];
+  int fd = oopen (config, O_RDONLY);
+  ssize_t nread = rread (fd, buf, BUF_SIZE);
+  cclose (fd);
 
-
-
-
-
-
-
-
-void load_config(const char *config, ENV env) {
-    fprintf(stderr, "loading config...");
-    const unsigned int BUF_SIZE = 8192;
-    char buf[BUF_SIZE];
-    int fd = oopen(config, O_RDONLY);
-    ssize_t nread = rread(fd, buf, BUF_SIZE);
-    cclose(fd);
-
-    for (int i = 0; i < nread; i++) {
+  for (int i = 0; i < nread; i++)
+    {
 
     }
 
-    fprintf(stderr, "finished loading config");
+  fprintf (stderr, "finished loading config");
 }
 
-
-int main() {
-    return 0;
+int main ()
+{
+  return 0;
 }
