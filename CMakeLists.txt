@@ -8,7 +8,7 @@ add_executable(sdstore src/sdstore.c)
 add_executable(sdstored src/sdstored.c)
 
 add_library(env src/env.c src/env.h)
-
+add_library(util src/util.c src/env.h)
 
 add_executable(main src/main.c)
-target_link_libraries(main env)
+target_link_libraries(main env util)
