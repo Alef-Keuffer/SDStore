@@ -1,4 +1,9 @@
-#include <stdio.h>
+#include <unistd.h>
+#include <sys/stat.h> /*for mkfifo*/
+#include <fcntl.h>
+#include <stdio.h> /*for perror*/
+#include <stdlib.h> /*for exit*/
+#include <errno.h>
 
 /*!
 
@@ -50,9 +55,136 @@ deactivate Server
 
 @enduml
  *
- */
+*/
+
+/*! @addtogroup transformations
+ * @{ */
+
+void transformation (const char* transf, const char *src, const char* dst) {
+    #include <string.h>
+    char file[50] = "bin/sdstore-transformations/";
+    strcat(file,transf);
+
+    pid_t pid;
+    if((pid = fork()) == 0)
+        execlp(file,transf,src,dst,NULL);
+    else if (pid < 0) {
+        perror("transformation failed forking");
+        exit(EXIT_FAILURE);
+    }
+}
+
+typedef enum transformation {
+    bcompress,
+    bdecompress,
+    decrypt,
+    encrypt,
+    gcompress,
+    gdecompress,
+    nop
+} TRANSFORMATION;
+//! @} end of group transformations
+
+typedef enum status {
+    pending,
+    processing,
+    finished
+} STATUS;
+
+typedef struct request {
+    unsigned long long client_id;
+    unsigned char priority; //! 0 to 5
+    TRANSFORMATION transformations[7];
+    STATUS status;
+} *REQUEST;
+
+const char* FIFO_SERVER_WRITE = "fromServer";
+const int FIFO_PERMISSION = 0666;
+int fifo_create_write () {
+    if (access(FIFO_SERVER_WRITE,F_OK) == -1) { /*check if fifo already exists*/
+        if (mkfifo(FIFO_SERVER_WRITE,FIFO_PERMISSION)) {
+            perror("fifo_create_write failed at mkfifo");
+            exit(EXIT_FAILURE);
+        }
+    }
+    int fd = open(FIFO_SERVER_WRITE,O_WRONLY);
+    if (fd == -1) {
+        perror("fifo_create_write failed at opening the fifo");
+        exit(EXIT_FAILURE);
+    }
+    return fd;
+}
+
+typedef struct env{
+    struct {
+        const unsigned int bcompress;
+        const unsigned int bdecompress;
+        const unsigned int decrypt;
+        const unsigned int encrypt;
+        const unsigned int gcompress;
+        const unsigned int gdecompress;
+        const unsigned int nop;
+    } limits;
+    struct {
+        unsigned int bcompress;
+        unsigned int bdecompress;
+        unsigned int decrypt;
+        unsigned int encrypt;
+        unsigned int gcompress;
+        unsigned int gdecompress;
+        unsigned int nop;
+    } in_progress;
+    ssize_t server;
+    ssize_t client;
+} *ENV;
+
+ssize_t rread(int fd, void *buf, ssize_t nbytes ) {
+    ssize_t ret;
+    ssize_t nread = 0;
+    while (nbytes != 0 && (ret = read(fd,buf,nbytes)) != 0) {
+        if (ret == -1) {
+            if (errno == EINTR)
+                continue;
+            perror("read");
+            break;
+        }
+        nread += ret;
+        nbytes -= ret;
+        buf += ret;
+    }
+    return nread;
+}
+
+int oopen(const char* file, int oflag) {
+    int fd = open(file,oflag);
+    if (fd == -1)
+        perror("oopen");
+    return fd;
+}
+
+int cclose(int fd) {
+    int status = close(fd);
+    if (status)
+        perror("cclose");
+    return status;
+}
+
+void load_config(const char* config, ENV env) {
+    const unsigned int BUF_SIZE = 8192;
+    char buf[BUF_SIZE];
+    fprintf(stderr,"loading config...");
+    int fd = oopen(config,O_RDONLY);
+    unsigned int pos = 0;
+    unsigned int i = 0;
+    ssize_t ret;
+
+    // Use readln from Alexandre and load limits into env
+
+    cclose(fd);
+    fprintf(stderr,"finished loading config");
+}
+
 
 int main() {
-    printf("Hello, World!\n");
     return 0;
 }
