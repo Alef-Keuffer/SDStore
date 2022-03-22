@@ -3,13 +3,13 @@
 #include <unistd.h>
 typedef struct env {
   struct {
-    const unsigned int bcompress;
-    const unsigned int bdecompress;
-    const unsigned int decrypt;
-    const unsigned int encrypt;
-    const unsigned int gcompress;
-    const unsigned int gdecompress;
-    const unsigned int nop;
+    unsigned int bcompress;
+    unsigned int bdecompress;
+    unsigned int decrypt;
+    unsigned int encrypt;
+    unsigned int gcompress;
+    unsigned int gdecompress;
+    unsigned int nop;
   } limits;
   struct {
     unsigned int bcompress;
@@ -19,11 +19,14 @@ typedef struct env {
     unsigned int gcompress;
     unsigned int gdecompress;
     unsigned int nop;
-  } in_progress;
+  } running;
+  char *transformations_path;
   ssize_t server;
   ssize_t client;
 } *ENV;
 
+/*! addtogroup transformations
+ * @{ */
 typedef enum transformation {
   bcompress,
   bdecompress,
@@ -33,6 +36,7 @@ typedef enum transformation {
   gdecompress,
   nop
 } TRANSFORMATION;
+
 
 /*I don't know how to extern anonymous structs,*/
 static const struct {
@@ -52,4 +56,5 @@ static const struct {
     .gdecompress = "gdecompress",
     .nop = "nop",
 };
+//! @} end of group transformations
 #endif //SDSTORE_ENV_H
