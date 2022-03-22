@@ -11,12 +11,12 @@
 
 /*! @addtogroup transformations
  * @{ */
-void transformation_apply (const char *transf, const char *src, const char *dst, const char* transformation_path)
+void transformation_apply (const char *transf, const char *src, const char *dst, const char *transformation_path)
 {
 #include <string.h>
 
-  char file[strlen(transformation_path)];
-  strcpy (file,transformation_path);
+  char file[strlen (transformation_path)];
+  strcpy (file, transformation_path);
   strcat (file, transf);
 
   pid_t pid;
@@ -40,7 +40,8 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
  */
 TRANSFORMATION parse_transformation (const char *string, int *i)
 {
-  while (!isalpha(string[*i])) *i += 1;
+  while (!isalpha(string[*i]))
+    *i += 1;
 
   const int transformation_name_length_upper_bound = 20;
   char buf[transformation_name_length_upper_bound];
@@ -156,7 +157,7 @@ int load_config (const char *config, ENV env)
           break;
       case nop:env->limits.nop = limit;
           break;
-      default:fprintf (stderr, "Bad config file i=%d and buf[i]=%s\n", i,buf+i);
+      default:fprintf (stderr, "Bad config file i=%d and buf[i]=%s\n", i, buf + i);
           return -1;
         }
     }
