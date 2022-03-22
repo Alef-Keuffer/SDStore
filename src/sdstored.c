@@ -11,16 +11,18 @@
 
 /*! @addtogroup transformations
  * @{ */
-void transformation_apply (const char *transf, const char *src, const char *dst)
+void transformation_apply (const char *transf, const char *src, const char *dst, const char* transformation_path)
 {
 #include <string.h>
 
-  char file[50] = "bin/sdstore-transformations/";
+  char file[strlen(transformation_path)];
+  strcpy (file,transformation_path);
   strcat (file, transf);
 
   pid_t pid;
   if ((pid = fork ()) == 0)
     execlp (file, transf, src, dst, NULL);
+
   else if (pid < 0)
     {
       perror ("transformation failed forking");
