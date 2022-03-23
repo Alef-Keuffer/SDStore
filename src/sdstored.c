@@ -130,9 +130,9 @@ const int FIFO_PERMISSION = 0666;
 int load_transformation_path (char *path, ENV env)
 {
   /*the path is argv[3] so no need to allocate memory*/
-  fprintf(stderr,"loading transformation path\n");
+  fprintf (stderr, "loading transformation path\n");
   env->transformations_path = path;
-  fprintf(stderr,"finished transformation path\n");
+  fprintf (stderr, "finished transformation path\n");
 
 }
 
@@ -239,20 +239,15 @@ void print_transformations (const TRANSFORMATION transformation[])
           break;
       case bcompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bcompress);
           break;
-      case bdecompress:
-        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bdecompress);
+      case bdecompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bdecompress);
           break;
-      case decrypt:
-        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.decrypt);
+      case decrypt:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.decrypt);
           break;
-      case gcompress:
-        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gcompress);
+      case gcompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gcompress);
           break;
-      case gdecompress:
-        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gdecompress);
+      case gdecompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gdecompress);
           break;
-      case nop:
-        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.nop);
+      case nop:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.nop);
           break;
         }
     }
@@ -285,13 +280,13 @@ int main (int argc, char *argv[])
 
   while (readln (fd, line, MAX_LINE_SIZE))
     {
-        fprintf(stderr,"HEY\n");
+      fprintf (stderr, "HEY\n");
 
-      get_task (line,tasks[global_taskid]);
+      get_task (line, tasks[global_taskid]);
       print_task (tasks[global_taskid]);
     }
 
-  cclose(fd);
+  cclose (fd);
   return 0;
 
 }
