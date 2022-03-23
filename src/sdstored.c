@@ -291,7 +291,7 @@ int main (int argc, char *argv[])
       print_task (tasks[global_taskid]);
     }
 
-    cclose(fd);
+  cclose(fd);
   return 0;
 
 }
