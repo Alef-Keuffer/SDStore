@@ -255,7 +255,7 @@ void get_task (const char *line, TASK task)
 
 void print_transformations (const TRANSFORMATION transformation[])
 {
-  for (unsigned int i = 0; transformation[i] >= 0; i++)
+  for (unsigned int i = 0; transformation[i] != -1 && i < 20; i++)
     fprintf(stderr,"%s ", transformation_get_name (transformation[i]));
 }
 
@@ -266,7 +266,7 @@ void print_task (TASK task)
   fprintf (stderr, "\tpriority = %u\n", task->priority);
   fprintf (stderr, "\tsrc = %s\n", task->src);
   fprintf (stderr, "\tdst = %s\n", task->dst);
-  //print_transformations (task->transformations);
+  print_transformations (task->transformations);
 }
 int main (int argc, char *argv[])
 {
