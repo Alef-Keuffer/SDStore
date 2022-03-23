@@ -12,6 +12,9 @@
 #include "util/task.h"
 
 #include "sdstored.h"
+
+static const int NPIPE_PERMISSION = 0666;
+
 /*!
  *
  * @param string A string that may start at a white space
@@ -101,7 +104,7 @@ int main (int argc, char *argv[])
 
   load_config (argv[1], &e);
   load_transformation_path (argv[2], &e);
-  int fd = fifo_create (NPIPE_TO_SERVER, NPIPE_PERMISSION, O_RDONLY);
+  int fd = fifo_create_and_open (NPIPE_TO_SERVER, NPIPE_PERMISSION, O_RDONLY);
 
   const unsigned int MAX_LINE_SIZE = 8192;
   char line[MAX_LINE_SIZE];

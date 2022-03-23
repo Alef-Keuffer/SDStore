@@ -6,7 +6,7 @@
 #include <errno.h>
 #include "util.h"
 
-int fifo_create (const char *path, mode_t permissions, int oflag)
+int fifo_create_and_open (const char *path, mode_t permissions, int oflag)
 {
   if (access (path, F_OK) == -1)
     { /*check if fifo already exists*/
