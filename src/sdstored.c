@@ -124,13 +124,16 @@ typedef struct task {
   TRANSFORMATION transformations[20];
 } *TASK;
 
-const char *FIFO_SERVER_WRITE = "fromServer";
+const char *FIFO_SERVER_READ = "toServer";
 const int FIFO_PERMISSION = 0666;
 
 int load_transformation_path (char *path, ENV env)
 {
   /*the path is argv[3] so no need to allocate memory*/
+  fprintf(stderr,"loading transformation path\n");
   env->transformations_path = path;
+  fprintf(stderr,"finished transformation path\n");
+
 }
 
 int load_config (const char *config, ENV env)
@@ -170,7 +173,7 @@ int load_config (const char *config, ENV env)
         }
     }
 
-  fprintf (stderr, "finished loading config");
+  fprintf (stderr, "finished loading config\n");
   return 0;
 }
 
@@ -226,7 +229,7 @@ void get_task (const char *line, TASK task)
   task->transformations[j] = -1;
 }
 
-void print_transformations (TRANSFORMATION transformation[])
+void print_transformations (const TRANSFORMATION transformation[])
 {
   for (unsigned int i = 0; transformation[i] >= 0; i++)
     {
@@ -262,6 +265,7 @@ void print_task (TASK task)
   fprintf (stderr, "\tpriority = %u\n", task->priority);
   fprintf (stderr, "\tsrc = %s\n", task->src);
   fprintf (stderr, "\tdst = %s\n", task->dst);
+  print_transformations (task->transformations);
 }
 int main (int argc, char *argv[])
 {
@@ -272,8 +276,7 @@ int main (int argc, char *argv[])
 
   load_config (argv[1], &e);
   load_transformation_path (argv[2], &e);
-
-  int fd = fifo_create_write (FIFO_SERVER_WRITE, FIFO_PERMISSION);
+  int fd = fifo_create (FIFO_SERVER_READ, FIFO_PERMISSION, O_RDONLY);
 
   const unsigned int MAX_LINE_SIZE = 8192;
   char line[MAX_LINE_SIZE];
@@ -282,9 +285,13 @@ int main (int argc, char *argv[])
 
   while (readln (fd, line, MAX_LINE_SIZE))
     {
+        fprintf(stderr,"HEY\n");
 
+      get_task (line,tasks[global_taskid]);
+      print_task (tasks[global_taskid]);
     }
 
+    cclose(fd);
   return 0;
 
 }
