@@ -1,30 +1,18 @@
 #include <unistd.h>
 #include <sys/stat.h> /*for mkfifo*/
 #include <fcntl.h>
+
 #include <stdio.h> /*for perror*/
 #include <stdlib.h> /*for exit*/
-#include <errno.h>
-#include <ctype.h>
-#include <string.h> /*for strcpy and strcmp*/
+#include <ctype.h> /*macros isspace,etc*/
 
 #include "util.h"
 #include "util/env.h"
 #include "util/transformation.h"
+#include "util/task.h"
 
-typedef enum status {
-  pending,
-  processing,
-  finished
-} STATUS;
-
-typedef struct task {
-  pid_t client_pid;
-  unsigned long long task_id;
-  int priority; //! 0 to 5
-  char src[100];
-  char dst[100];
-  TRANSFORMATION transformations[20];
-} *TASK;
+const char *NPIPE_TO_SERVER = "toServer";
+const int NPIPE_PERMISSION = 0666;
 
 /*!
  *
@@ -106,91 +94,6 @@ int load_config (const char *config, ENV env)
   return 0;
 }
 
-long long global_taskid = 0;
-
-enum COMMAND {
-  proc_file,
-  status
-};
-
-enum COMMAND parse_command (const char *line, unsigned int *i)
-{
-  const unsigned int BUF_SIZE = 100;
-  char buf[BUF_SIZE];
-  unsigned int j;
-  while (isspace (line[*i])) *i += 1;
-  for (j = 0; *i < BUF_SIZE && !isspace(line[*i]); j++, *i += 1)
-    buf[j] = line[*i];
-  buf[j] = '\0';
-
-  if (!strcmp ("proc-file", buf))
-    return proc_file;
-  else if (!strcmp ("status", buf))
-    return status;
-  else
-    return -1;
-}
-
-void get_task (const char *line, TASK task)
-{
-  char buf[BUFSIZ];
-  unsigned int i;
-  // "192 proc-file 2 filea fileacomp nop nop";
-
-  //get client pid
-  for (i = 0; isdigit(line[i]); i++)
-    buf[i] = line[i];
-  buf[i] = '\0';
-
-  task->client_pid = atoi (buf);
-
-
-  enum COMMAND command = parse_command (line, &i);
-  fprintf(stderr,"after command string: '%s'\n",line+i);
-
-  if (command != proc_file)
-    return; //temporary
-
-  task->task_id = global_taskid++;
-
-  while(isspace(line[i])) i++;
-  fprintf(stderr,"priority string is %c\n",line[i]);
-  buf[0] = line[i++];
-  buf[1] = '\0';
-  task->priority = atoi(buf);
-  fprintf(stderr,"priority is %d\n",task->priority);
-  fprintf(stderr,"after priority string: '%s'\n",line+i);
-
-
-  while(isspace(line[i])) i++;
-  unsigned int j;
-  for (j = 0; !isspace(line[i]); j++, i++)
-    task->src[j] = line[i];
-  task->src[j] = '\0';
-  fprintf(stderr,"src is %s\n",task->src);
-
-  while(isspace(line[i])) i++;
-  for (j = 0; !isspace(line[i]); j++, i++)
-    task->dst[j] = line[i];
-  task->dst[j] = '\0';
-  fprintf(stderr,"dst is %s\n",task->dst);
-
-  for (j = 0; line[i] != '\0'; j++) {
-      task->transformations[j] = parse_transformation (line, &i);
-      fprintf (stderr,"read transforamtion %s\n", transformation_get_name (task->transformations[j]));
-  }
-  task->transformations[j] = -1;
-}
-
-void print_task (TASK task)
-{
-  fprintf (stderr, "task_id = %llu\n", task->task_id);
-  fprintf (stderr, "\tclient_pid = %ld\n", (long) task->client_pid);
-  fprintf (stderr, "\tpriority = %u\n", task->priority);
-  fprintf (stderr, "\tsrc = %s\n", task->src);
-  fprintf (stderr, "\tdst = %s\n", task->dst);
-  print_transformations (task->transformations);
-}
 int main (int argc, char *argv[])
 {
   if (argc != 3)
@@ -207,13 +110,15 @@ int main (int argc, char *argv[])
 
   struct task tasks[8192];
   unsigned int ret;
+  unsigned long long taskId = 0;
 
   while ((ret = readln (fd, line, MAX_LINE_SIZE)))
     {
       fprintf (stderr, "HEY\n");
       line[ret] = '\0';
-      get_task (line, &tasks[global_taskid]);
-      print_task (&tasks[global_taskid-1]);
+      taskId = get_task (line, &tasks[taskId]);
+      if (taskId != -1)
+        print_task (&tasks[taskId-1]);
     }
 
   cclose (fd);

@@ -2,7 +2,7 @@
 #include <fcntl.h>
 #include "util.h"
 #include "sdstored.h"
-const char *NPIPE_TO_SERVER = "toServer";
+
 int main(int argc, char *argv[]) {
   int fd = oopen(NPIPE_TO_SERVER,O_WRONLY);
   const unsigned int comLen = 39;

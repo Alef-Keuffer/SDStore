@@ -34,6 +34,8 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
       exit (EXIT_FAILURE);
     }
 }
+/*! @addtogroup string
+ * @{ */
 
 /*! @addtogroup parsing
  * @{ */
@@ -80,9 +82,27 @@ TRANSFORMATION parse_transformation (const char *string, unsigned int *i)
 }
 //! @} end of group parsing
 
+const char *transformation_get_name (enum transformation t)
+{
+  switch (t)
+    {
+  case bcompress:return TRANSFORMATION_NAMES.bcompress;
+  case bdecompress:return TRANSFORMATION_NAMES.bdecompress;
+  case decrypt:return TRANSFORMATION_NAMES.decrypt;
+  case encrypt:return TRANSFORMATION_NAMES.encrypt;
+  case gcompress:return TRANSFORMATION_NAMES.gcompress;
+  case gdecompress:return TRANSFORMATION_NAMES.gdecompress;
+  case nop:return TRANSFORMATION_NAMES.nop;
+  default:
+    fprintf(stderr,"transformation_get_name: not valid transformation");
+    return "";
+    }
+}
+
 void print_transformations (const TRANSFORMATION transformation[])
 {
   for (unsigned int i = 0; transformation[i] != -1 && i < 20; i++)
     fprintf(stderr,"%s ", transformation_get_name (transformation[i]));
 }
+//! @} end of group string
 //! @} end of group transformations
