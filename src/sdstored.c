@@ -5,6 +5,7 @@
 #include <stdlib.h> /*for exit*/
 #include <errno.h>
 #include <ctype.h>
+#include <string.h> /*for strcpy and strcmp*/
 
 #include "util.h"
 #include "env.h"
@@ -13,8 +14,6 @@
  * @{ */
 void transformation_apply (const char *transf, const char *src, const char *dst, const char *transformation_path)
 {
-#include <string.h>
-
   char file[strlen (transformation_path)];
   strcpy (file, transformation_path);
   strcat (file, transf);
@@ -119,13 +118,13 @@ typedef struct task {
   pid_t client_pid;
   unsigned long long task_id;
   unsigned char priority; //! 0 to 5
-  const char *src;
-  const char *dst;
+  char src[100];
+  char dst[100];
   TRANSFORMATION transformations[20];
 } *TASK;
 
-const char *FIFO_SERVER_READ = "toServer";
-const int FIFO_PERMISSION = 0666;
+const char *NPIPE_TO_SERVER = "toServer";
+const int NPIPE_PERMISSION = 0666;
 
 int load_transformation_path (char *path, ENV env)
 {
@@ -189,8 +188,13 @@ enum COMMAND parse_command (const char *line, unsigned int *i)
   const unsigned int BUF_SIZE = 100;
   char buf[BUF_SIZE];
   unsigned int j;
-  for (j = 0; *i < BUF_SIZE && isalpha(line[*i]); j++, *i += 1)
+  while (isspace (line[*i += 1]));
+  for (j = 0; *i < BUF_SIZE && !isspace(line[*i]); j++, *i += 1) {
+    fprintf(stderr,"parse_command i is %d and char is %c\n",*i,line[*i]);
     buf[j] = line[*i];
+  }
+  fprintf(stderr,"stopped because of %c\n",line[*i]);
+
   buf[j] = '\0';
 
   if (!strcmp ("proc-file", buf))
@@ -213,18 +217,40 @@ void get_task (const char *line, TASK task)
 
   task->client_pid = atoi (buf);
 
+
+  fprintf(stderr,"i is %d\n",i);
   enum COMMAND command = parse_command (line + i, &i);
+  fprintf(stderr,"command is %s\n",line + i);
+  fprintf(stderr,"i is %d\n",i);
 
   if (command != proc_file)
     return; //temporary
 
   task->task_id = global_taskid++;
 
+  while(isspace(line[i++]));
+
+  fprintf(stderr,"string is %s\n",line + i);
+
   task->priority = parse_limit (line + i, &i);
 
   unsigned int j;
-  for (j = 0; line[i] != '\0'; j++)
-    task->transformations[j] = parse_transformation (line + i, &i);
+  for (j = 0; !isspace(line[i]); j++, i++)
+    task->src[j] = line[i];
+  task->src[j] = '\0';
+
+  while(isspace(line[i++]));
+
+  for (j = 0; !isspace(line[i]); j++, i++)
+    task->dst[j] = line[i];
+  task->dst[j] = '\0';
+
+  fprintf(stderr,"dst is %s\n",task->src);
+
+  for (j = 0; line[i] != '\0'; j++) {
+      fprintf (stderr,"looping\n");
+      task->transformations[j] = parse_transformation (line + i, &i);
+  }
 
   task->transformations[j] = -1;
 }
@@ -249,6 +275,8 @@ void print_transformations (const TRANSFORMATION transformation[])
           break;
       case nop:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.nop);
           break;
+      default:
+          return;
         }
     }
 }
@@ -260,7 +288,7 @@ void print_task (TASK task)
   fprintf (stderr, "\tpriority = %u\n", task->priority);
   fprintf (stderr, "\tsrc = %s\n", task->src);
   fprintf (stderr, "\tdst = %s\n", task->dst);
-  print_transformations (task->transformations);
+//  print_transformations (task->transformations);
 }
 int main (int argc, char *argv[])
 {
@@ -271,19 +299,20 @@ int main (int argc, char *argv[])
 
   load_config (argv[1], &e);
   load_transformation_path (argv[2], &e);
-  int fd = fifo_create (FIFO_SERVER_READ, FIFO_PERMISSION, O_RDONLY);
+  int fd = fifo_create (NPIPE_TO_SERVER, NPIPE_PERMISSION, O_RDONLY);
 
   const unsigned int MAX_LINE_SIZE = 8192;
   char line[MAX_LINE_SIZE];
 
-  TASK tasks[8192];
+  struct task tasks[8192];
+  unsigned int ret;
 
-  while (readln (fd, line, MAX_LINE_SIZE))
+  while ((ret = readln (fd, line, MAX_LINE_SIZE)))
     {
       fprintf (stderr, "HEY\n");
-
-      get_task (line, tasks[global_taskid]);
-      print_task (tasks[global_taskid]);
+      line[ret] = '\0';
+      get_task (line, &tasks[global_taskid]);
+      print_task (&tasks[global_taskid]);
     }
 
   cclose (fd);
