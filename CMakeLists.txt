@@ -4,11 +4,12 @@ project(SDStore C)
 set(CMAKE_C_STANDARD 23)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 
-add_library(env src/env.c src/env.h)
-add_library(util src/util.c src/env.h)
+add_library(env src/util/env.c src/util/env.h)
+add_library(util src/util.c src/util/env.h)
+add_library(transformation src/util/transformation.c src/util/transformation.h)
 
 add_executable(sdstored src/sdstored.c src/sdstored.h)
-target_link_libraries(sdstored env util)
+target_link_libraries(sdstored env util transformation)
 
 add_executable(sdstore src/sdstore.c src/sdstored.h)
 target_link_libraries(sdstore env util)

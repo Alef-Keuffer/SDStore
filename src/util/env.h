@@ -37,7 +37,6 @@ typedef enum transformation {
   nop
 } TRANSFORMATION;
 
-
 /*I don't know how to extern anonymous structs,*/
 static const struct {
   const char *bcompress;
@@ -59,4 +58,7 @@ static const struct {
 
 const char *transformation_get_name (enum transformation t);
 //! @} end of group transformations
+
+extern const char *NPIPE_TO_SERVER;
+extern const int NPIPE_PERMISSION;
 #endif //SDSTORE_ENV_H

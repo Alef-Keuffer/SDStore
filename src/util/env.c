@@ -17,3 +17,6 @@ const char *transformation_get_name (enum transformation t)
     return "";
     }
 }
+
+const char *NPIPE_TO_SERVER = "toServer";
+const int NPIPE_PERMISSION = 0666;
