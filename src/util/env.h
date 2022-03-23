@@ -58,7 +58,4 @@ static const struct {
 
 const char *transformation_get_name (enum transformation t);
 //! @} end of group transformations
-
-extern const char *NPIPE_TO_SERVER;
-extern const int NPIPE_PERMISSION;
 #endif //SDSTORE_ENV_H

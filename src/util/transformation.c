@@ -76,7 +76,7 @@ TRANSFORMATION parse_transformation (const char *string, unsigned int *i)
     return nop;
   else
     {
-      fprintf (stderr, "Invalid operation ending at: i=%d\n", *i);
+      fprintf (stderr, "parse_transformation:n\n\tInvalid operation ending at: i=%d\n", *i);
       return -1;
     }
 }

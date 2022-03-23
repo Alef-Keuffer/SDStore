@@ -11,9 +11,7 @@
 #include "util/transformation.h"
 #include "util/task.h"
 
-const char *NPIPE_TO_SERVER = "toServer";
-const int NPIPE_PERMISSION = 0666;
-
+#include "sdstored.h"
 /*!
  *
  * @param string A string that may start at a white space
@@ -117,8 +115,9 @@ int main (int argc, char *argv[])
       fprintf (stderr, "HEY\n");
       line[ret] = '\0';
       taskId = get_task (line, &tasks[taskId]);
+      fprintf(stderr,"taskid is %llu\n",taskId);
       if (taskId != -1)
-        print_task (&tasks[taskId-1]);
+        print_task (&tasks[taskId]);
     }
 
   cclose (fd);

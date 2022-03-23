@@ -72,5 +72,6 @@ void print_task (TASK task)
   fprintf (stderr, "\tpriority = %u\n", task->priority);
   fprintf (stderr, "\tsrc = %s\n", task->src);
   fprintf (stderr, "\tdst = %s\n", task->dst);
+  fprintf (stderr, "transformations: ");
   print_transformations (task->transformations);
 }

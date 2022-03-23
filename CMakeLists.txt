@@ -18,6 +18,7 @@ target_link_libraries(task command)
 add_executable(sdstored src/sdstored.c src/sdstored.h)
 target_link_libraries(sdstored env util transformation command task)
 
+
 add_executable(sdstore src/sdstore.c src/sdstored.h)
 target_link_libraries(sdstore env util)
 
