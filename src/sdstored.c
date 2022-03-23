@@ -19,13 +19,12 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
   strcpy (file, transformation_path);
   strcat (file, transf);
 
-  int in_fd = oopen(src,O_RDONLY);
-  dup2(in_fd,STDIN_FILENO);
-  cclose(in_fd);
-  int out_fd = oopen(dst,O_WRONLY);
-  dup2(in_fd,STDOUT_FILENO);
-  close(out_fd);
-
+  int in_fd = oopen (src, O_RDONLY);
+  dup2 (in_fd, STDIN_FILENO);
+  cclose (in_fd);
+  int out_fd = oopen (dst, O_WRONLY);
+  dup2 (in_fd, STDOUT_FILENO);
+  close (out_fd);
 
   pid_t pid;
   if ((pid = fork ()) == 0)
@@ -182,70 +181,87 @@ enum COMMAND {
   status
 };
 
-enum COMMAND parse_command(const char*line, unsigned int *i) {
+enum COMMAND parse_command (const char *line, unsigned int *i)
+{
   const unsigned int BUF_SIZE = 100;
   char buf[BUF_SIZE];
   unsigned int j;
-  for (j=0;*i < BUF_SIZE && isalpha(line[*i]); j++, *i += 1) buf[j] = line[*i];
+  for (j = 0; *i < BUF_SIZE && isalpha(line[*i]); j++, *i += 1)
+    buf[j] = line[*i];
   buf[j] = '\0';
 
-  if (!strcmp("proc-file",buf))
+  if (!strcmp ("proc-file", buf))
     return proc_file;
-  else if (!strcmp ("status",buf))
+  else if (!strcmp ("status", buf))
     return status;
   else
     return -1;
 }
 
-void get_task(const char* line, TASK task) {
+void get_task (const char *line, TASK task)
+{
   char buf[BUFSIZ];
   unsigned int i;
 
   //get client pid
-  for (i = 0; isdigit(line[i]); i++) buf[i] = line[i];
+  for (i = 0; isdigit(line[i]); i++)
+    buf[i] = line[i];
   buf[i] = '\0';
 
   task->client_pid = atoi (buf);
 
-  enum COMMAND command = parse_command (line+i,&i);
+  enum COMMAND command = parse_command (line + i, &i);
 
-  if (command != proc_file) return; //temporary
+  if (command != proc_file)
+    return; //temporary
 
-  task->task_id = global_taskid ++;
+  task->task_id = global_taskid++;
 
-  task->priority = parse_limit (line + i,&i);
+  task->priority = parse_limit (line + i, &i);
 
   unsigned int j;
-  for (j = 0;line[i] != '\0';j++)
-    task->transformations[j] = parse_transformation (line+i,&i);
+  for (j = 0; line[i] != '\0'; j++)
+    task->transformations[j] = parse_transformation (line + i, &i);
 
   task->transformations[j] = -1;
 }
 
-void print_transformations(TRANSFORMATION transformation[]) {
-  for (unsigned int i = 0; transformation[i] >= 0; i++) {
-    switch(transformation[i]) {
-    case encrypt:
-      fprintf(stderr,"%s ",TRANSFORMATION_NAMES.encrypt);
-      break;
-    case bcompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.bcompress);
-    break;
-    case bdecompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.bdecompress);break;
-    case decrypt:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.decrypt);break;
-    case gcompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.gcompress);break;
-    case gdecompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.gdecompress);break;
-    case nop:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.nop);break;
-      }
-  }
+void print_transformations (TRANSFORMATION transformation[])
+{
+  for (unsigned int i = 0; transformation[i] >= 0; i++)
+    {
+      switch (transformation[i])
+        {
+      case encrypt:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.encrypt);
+          break;
+      case bcompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bcompress);
+          break;
+      case bdecompress:
+        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bdecompress);
+          break;
+      case decrypt:
+        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.decrypt);
+          break;
+      case gcompress:
+        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gcompress);
+          break;
+      case gdecompress:
+        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gdecompress);
+          break;
+      case nop:
+        fprintf (stderr, "%s ", TRANSFORMATION_NAMES.nop);
+          break;
+        }
+    }
 }
 
-void print_task(TASK task)
+void print_task (TASK task)
 {
-  fprintf (stderr,"task_id = %llu\n",task->task_id);
-  fprintf (stderr,"\tclient_pid = %ld\n",(long)task->client_pid);
-  fprintf (stderr,"\tpriority = %u\n",task->priority);
-  fprintf (stderr,"\tsrc = %s\n",task->src);
-  fprintf (stderr,"\tdst = %s\n",task->dst);
+  fprintf (stderr, "task_id = %llu\n", task->task_id);
+  fprintf (stderr, "\tclient_pid = %ld\n", (long) task->client_pid);
+  fprintf (stderr, "\tpriority = %u\n", task->priority);
+  fprintf (stderr, "\tsrc = %s\n", task->src);
+  fprintf (stderr, "\tdst = %s\n", task->dst);
 }
 int main (int argc, char *argv[])
 {
@@ -264,9 +280,10 @@ int main (int argc, char *argv[])
 
   TASK tasks[8192];
 
-  while (readln(fd,line,MAX_LINE_SIZE)) {
+  while (readln (fd, line, MAX_LINE_SIZE))
+    {
 
-  }
+    }
 
   return 0;
 
