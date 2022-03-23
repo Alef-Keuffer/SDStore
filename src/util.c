@@ -45,6 +45,16 @@ ssize_t rread (int fd, void *buf, ssize_t nbytes)
   return nread;
 }
 
+ssize_t readln (int fd, char buf[], ssize_t maxLength) {
+  char c;
+  ssize_t ret = 0;
+  for (unsigned int i=0; i<maxLength && rread(fd,&c,1) && c != '\n'; i ++){
+    buf[i] = c;
+    ret ++;
+  }
+  return ret;
+}
+
 int oopen (const char *file, int oflag)
 {
   int fd = open (file, oflag);

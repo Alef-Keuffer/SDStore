@@ -46,7 +46,7 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
  * @param i position to start reading string
  * @return The first transformation found reading from string[i]
  */
-TRANSFORMATION parse_transformation (const char *string, int *i)
+TRANSFORMATION parse_transformation (const char *string, unsigned int *i)
 {
   while (!isalpha(string[*i]))
     *i += 1;
@@ -86,7 +86,7 @@ TRANSFORMATION parse_transformation (const char *string, int *i)
  * @param i position to start reading string
  * @return first int found reading form string[i]
  */
-int parse_limit (const char *string, int *i)
+int parse_limit (const char *string, unsigned int *i)
 {
   while (string[*i] != '\0' && !isdigit(string[*i]))
     *i += 1;
@@ -117,11 +117,12 @@ typedef enum status {
 } STATUS;
 
 typedef struct task {
+  pid_t client_pid;
   unsigned long long task_id;
   unsigned char priority; //! 0 to 5
   const char *src;
   const char *dst;
-  TRANSFORMATION *transformations;
+  TRANSFORMATION transformations[20];
 } *TASK;
 
 const char *FIFO_SERVER_WRITE = "fromServer";
@@ -144,11 +145,11 @@ int load_config (const char *config, ENV env)
   fprintf (stderr, "%s\n", buf);
   cclose (fd);
 
-  int i = 0;
+  unsigned int i = 0;
   while (buf[i] != 0)
     {
       TRANSFORMATION transf = parse_transformation (buf, &i);
-      int limit = parse_limit (buf, &i);
+      unsigned int limit = parse_limit (buf, &i);
       switch (transf)
         {
       case gcompress:env->limits.gcompress = limit;
@@ -174,6 +175,78 @@ int load_config (const char *config, ENV env)
   return 0;
 }
 
+long long global_taskid = 0;
+
+enum COMMAND {
+  proc_file,
+  status
+};
+
+enum COMMAND parse_command(const char*line, unsigned int *i) {
+  const unsigned int BUF_SIZE = 100;
+  char buf[BUF_SIZE];
+  unsigned int j;
+  for (j=0;*i < BUF_SIZE && isalpha(line[*i]); j++, *i += 1) buf[j] = line[*i];
+  buf[j] = '\0';
+
+  if (!strcmp("proc-file",buf))
+    return proc_file;
+  else if (!strcmp ("status",buf))
+    return status;
+  else
+    return -1;
+}
+
+void get_task(const char* line, TASK task) {
+  char buf[BUFSIZ];
+  unsigned int i;
+
+  //get client pid
+  for (i = 0; isdigit(line[i]); i++) buf[i] = line[i];
+  buf[i] = '\0';
+
+  task->client_pid = atoi (buf);
+
+  enum COMMAND command = parse_command (line+i,&i);
+
+  if (command != proc_file) return; //temporary
+
+  task->task_id = global_taskid ++;
+
+  task->priority = parse_limit (line + i,&i);
+
+  unsigned int j;
+  for (j = 0;line[i] != '\0';j++)
+    task->transformations[j] = parse_transformation (line+i,&i);
+
+  task->transformations[j] = -1;
+}
+
+void print_transformations(TRANSFORMATION transformation[]) {
+  for (unsigned int i = 0; transformation[i] >= 0; i++) {
+    switch(transformation[i]) {
+    case encrypt:
+      fprintf(stderr,"%s ",TRANSFORMATION_NAMES.encrypt);
+      break;
+    case bcompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.bcompress);
+    break;
+    case bdecompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.bdecompress);break;
+    case decrypt:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.decrypt);break;
+    case gcompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.gcompress);break;
+    case gdecompress:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.gdecompress);break;
+    case nop:fprintf(stderr,"%s ",TRANSFORMATION_NAMES.nop);break;
+      }
+  }
+}
+
+void print_task(TASK task)
+{
+  fprintf (stderr,"task_id = %llu\n",task->task_id);
+  fprintf (stderr,"\tclient_pid = %ld\n",(long)task->client_pid);
+  fprintf (stderr,"\tpriority = %u\n",task->priority);
+  fprintf (stderr,"\tsrc = %s\n",task->src);
+  fprintf (stderr,"\tdst = %s\n",task->dst);
+}
 int main (int argc, char *argv[])
 {
   if (argc != 3)
@@ -183,6 +256,17 @@ int main (int argc, char *argv[])
 
   load_config (argv[1], &e);
   load_transformation_path (argv[2], &e);
+
+  int fd = fifo_create_write (FIFO_SERVER_WRITE, FIFO_PERMISSION);
+
+  const unsigned int MAX_LINE_SIZE = 8192;
+  char line[MAX_LINE_SIZE];
+
+  TASK tasks[8192];
+
+  while (readln(fd,line,MAX_LINE_SIZE)) {
+
+  }
 
   return 0;
 
