@@ -19,6 +19,14 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
   strcpy (file, transformation_path);
   strcat (file, transf);
 
+  int in_fd = oopen(src,O_RDONLY);
+  dup2(in_fd,STDIN_FILENO);
+  cclose(in_fd);
+  int out_fd = oopen(dst,O_WRONLY);
+  dup2(in_fd,STDOUT_FILENO);
+  close(out_fd);
+
+
   pid_t pid;
   if ((pid = fork ()) == 0)
     execlp (file, transf, src, dst, NULL);
