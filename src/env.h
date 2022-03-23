@@ -56,5 +56,7 @@ static const struct {
     .gdecompress = "gdecompress",
     .nop = "nop",
 };
+
+const char *transformation_get_name (enum transformation t);
 //! @} end of group transformations
 #endif //SDSTORE_ENV_H

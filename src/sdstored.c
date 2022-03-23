@@ -46,6 +46,7 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
  */
 TRANSFORMATION parse_transformation (const char *string, unsigned int *i)
 {
+  if (i == NULL) i = 0;
   while (!isalpha(string[*i]))
     *i += 1;
 
@@ -117,7 +118,7 @@ typedef enum status {
 typedef struct task {
   pid_t client_pid;
   unsigned long long task_id;
-  unsigned char priority; //! 0 to 5
+  int priority; //! 0 to 5
   char src[100];
   char dst[100];
   TRANSFORMATION transformations[20];
@@ -188,13 +189,9 @@ enum COMMAND parse_command (const char *line, unsigned int *i)
   const unsigned int BUF_SIZE = 100;
   char buf[BUF_SIZE];
   unsigned int j;
-  while (isspace (line[*i += 1]));
-  for (j = 0; *i < BUF_SIZE && !isspace(line[*i]); j++, *i += 1) {
-    fprintf(stderr,"parse_command i is %d and char is %c\n",*i,line[*i]);
+  while (isspace (line[*i])) *i += 1;
+  for (j = 0; *i < BUF_SIZE && !isspace(line[*i]); j++, *i += 1)
     buf[j] = line[*i];
-  }
-  fprintf(stderr,"stopped because of %c\n",line[*i]);
-
   buf[j] = '\0';
 
   if (!strcmp ("proc-file", buf))
@@ -209,6 +206,7 @@ void get_task (const char *line, TASK task)
 {
   char buf[BUFSIZ];
   unsigned int i;
+  // "192 proc-file 2 filea fileacomp nop nop";
 
   //get client pid
   for (i = 0; isdigit(line[i]); i++)
@@ -218,67 +216,47 @@ void get_task (const char *line, TASK task)
   task->client_pid = atoi (buf);
 
 
-  fprintf(stderr,"i is %d\n",i);
-  enum COMMAND command = parse_command (line + i, &i);
-  fprintf(stderr,"command is %s\n",line + i);
-  fprintf(stderr,"i is %d\n",i);
+  enum COMMAND command = parse_command (line, &i);
+  fprintf(stderr,"after command string: '%s'\n",line+i);
 
   if (command != proc_file)
     return; //temporary
 
   task->task_id = global_taskid++;
 
-  while(isspace(line[i++]));
+  while(isspace(line[i])) i++;
+  fprintf(stderr,"priority string is %c\n",line[i]);
+  buf[0] = line[i++];
+  buf[1] = '\0';
+  task->priority = atoi(buf);
+  fprintf(stderr,"priority is %d\n",task->priority);
+  fprintf(stderr,"after priority string: '%s'\n",line+i);
 
-  fprintf(stderr,"string is %s\n",line + i);
 
-  task->priority = parse_limit (line + i, &i);
-
+  while(isspace(line[i])) i++;
   unsigned int j;
   for (j = 0; !isspace(line[i]); j++, i++)
     task->src[j] = line[i];
   task->src[j] = '\0';
+  fprintf(stderr,"src is %s\n",task->src);
 
-  while(isspace(line[i++]));
-
+  while(isspace(line[i])) i++;
   for (j = 0; !isspace(line[i]); j++, i++)
     task->dst[j] = line[i];
   task->dst[j] = '\0';
-
-  fprintf(stderr,"dst is %s\n",task->src);
+  fprintf(stderr,"dst is %s\n",task->dst);
 
   for (j = 0; line[i] != '\0'; j++) {
-      fprintf (stderr,"looping\n");
-      task->transformations[j] = parse_transformation (line + i, &i);
+      task->transformations[j] = parse_transformation (line, &i);
+      fprintf (stderr,"read transforamtion %s\n", transformation_get_name (task->transformations[j]));
   }
-
   task->transformations[j] = -1;
 }
 
 void print_transformations (const TRANSFORMATION transformation[])
 {
   for (unsigned int i = 0; transformation[i] >= 0; i++)
-    {
-      switch (transformation[i])
-        {
-      case encrypt:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.encrypt);
-          break;
-      case bcompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bcompress);
-          break;
-      case bdecompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.bdecompress);
-          break;
-      case decrypt:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.decrypt);
-          break;
-      case gcompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gcompress);
-          break;
-      case gdecompress:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.gdecompress);
-          break;
-      case nop:fprintf (stderr, "%s ", TRANSFORMATION_NAMES.nop);
-          break;
-      default:
-          return;
-        }
-    }
+    fprintf(stderr,"%s ", transformation_get_name (transformation[i]));
 }
 
 void print_task (TASK task)
@@ -288,7 +266,7 @@ void print_task (TASK task)
   fprintf (stderr, "\tpriority = %u\n", task->priority);
   fprintf (stderr, "\tsrc = %s\n", task->src);
   fprintf (stderr, "\tdst = %s\n", task->dst);
-//  print_transformations (task->transformations);
+  //print_transformations (task->transformations);
 }
 int main (int argc, char *argv[])
 {
@@ -312,7 +290,7 @@ int main (int argc, char *argv[])
       fprintf (stderr, "HEY\n");
       line[ret] = '\0';
       get_task (line, &tasks[global_taskid]);
-      print_task (&tasks[global_taskid]);
+      print_task (&tasks[global_taskid-1]);
     }
 
   cclose (fd);
