@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 /*!
 
 @mainpage Example use
@@ -50,9 +48,13 @@ deactivate Server
 
 @enduml
  *
- */
+*/
 
-int main() {
-    printf("Hello, World!\n");
-    return 0;
+
+
+
+
+int main ()
+{
+  return 0;
 }
