@@ -11,3 +11,9 @@ link_libraries(util)
 add_executable(main src/main.c)
 add_executable(client src/client.c)
 add_executable(server src/server.c)
+
+add_custom_target(
+        docs
+        COMMAND doxygen Doxyfile
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)

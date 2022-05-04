@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['sdstore_2ec_0',['sdstore.c',['../sdstore_8c.html',1,'']]],
-  ['sdstored_2ec_1',['sdstored.c',['../sdstored_8c.html',1,'']]]
+  ['example_20use_0',['Example use',['../index.html',1,'']]],
+  ['exec_1',['exec',['../server_8c.html#a64f211714646f225653c0c02f77acd0b',1,'server.c']]]
 ];
