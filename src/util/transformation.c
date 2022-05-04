@@ -4,6 +4,7 @@
 #include <stdio.h> /*perror*/
 #include <stdlib.h> /*exit*/
 #include <ctype.h> /*macros isdigit,isalpha,etc*/
+#include <sys/wait.h>
 
 #include "transformation.h"
 #include "env.h"
@@ -34,6 +35,77 @@ void transformation_apply (const char *transf, const char *src, const char *dst,
       exit (EXIT_FAILURE);
     }
 }
+void apply_transformations(const TRANSFORMATION transformations[], const char *src, const char *dst, const char *transformation_path) {
+  for (int i = 0; transformations[i] != -1; i++) {
+      transformation_apply(transformation_get_name (transformations[i]),src,dst,transformation_path);
+  }
+}
+
+
+int fork_exec(const char *file, const char *arg) {
+  pid_t pid = fork();
+  if (pid == 0)
+    execlp (file,arg);
+  else {
+    int status;
+    wait(&status);
+    return WEXITSTATUS(status);
+  }
+}
+
+int pipe_progs(const char* src, const char* dst, const int N ,char* progs[]) {
+
+  int fds[2*N];
+  for (int i = 0; i < N-1; i+=2)
+    pipe(fds+i);
+
+  pid_t pid;
+  int fd;
+
+  for (int i = 0; i < N; i++) {
+    pid = fork();
+    if (!pid) {
+      if (i == 0) {
+        fd = open(src,O_RDONLY);
+        dup2(fd,STDIN_FILENO);
+        close(fd);
+        dup2(fds[i+1],STDOUT_FILENO);
+      }
+      else if (i == N - 1) {
+        dup2(fds[i-1],STDIN_FILENO);
+        fd = open(dst,O_WRONLY);
+        dup2(fd,STDOUT_FILENO);
+        close(fd);
+      }
+      else {
+        dup2(fds[i-1],STDIN_FILENO);
+        dup2(fds[i],STDOUT_FILENO);
+      }
+        fork_exec (progs[i],progs[i]);
+    }
+  }
+  return 0;
+}
+
+void apply_transformations2(const TRANSFORMATION transformations[], const char *src, const char *dst, const char *transformation_path) {
+  int i = 0;
+  while (transformations[i] != -1) i++;
+
+  char *progs[i];
+
+  for (int j = 0; j < i; j++) {
+    char string[200];
+    strcat(string,transformation_path);
+    strcat(string,"/");
+    strcat(string, transformation_get_name (transformations[i]));
+    progs[j] = calloc(strlen(string)+1,sizeof(char));
+    strcpy(string,progs[i]);
+  }
+  pipe_progs (src,dst,i,progs);
+
+  for (int j = 0; j < i; j++) free(progs[i]);
+}
+
 /*! @addtogroup string
  * @{ */
 
@@ -97,6 +169,30 @@ const char *transformation_get_name (enum transformation t)
     fprintf(stderr,"transformation_get_name: not valid transformation");
     return "";
     }
+}
+
+void transformation_get_totals(TRANSFORMATION t[], int totals[nTransformations]) {
+  memset(totals,0,sizeof(int)*nTransformations);
+  for (int i = 0; t[i] != -1; t++) totals[t[i]] ++;
+}
+
+int transformation_is_possible(ENV e, const int totals[nTransformations]) {
+
+  for (int i = 0; i < nTransformations; i++)
+    if (e->running[i] + totals[i] > e->limits[i])
+      return 0;
+
+  return 1;
+}
+
+void transformation_add_to_running(ENV e, const int totals[nTransformations]) {
+  for (int i = 0; i < nTransformations; i++)
+    e->running[i] += totals[i];
+}
+
+void transformation_sub_from_running(ENV e, const int totals[nTransformations]) {
+  for (int i = 0; i < nTransformations; i++)
+    e->running[i] -= totals[i];
 }
 
 void print_transformations (const TRANSFORMATION transformation[])

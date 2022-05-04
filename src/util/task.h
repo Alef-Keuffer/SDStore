@@ -9,7 +9,7 @@ typedef enum status {
 } STATUS;
 
 typedef struct task {
-  pid_t client_pid;
+  char client_pid[32];
   unsigned long long task_id;
   int priority; //! 0 to 5
   char src[100];
@@ -19,4 +19,5 @@ typedef struct task {
 
 void print_task (TASK task);
 unsigned long long get_task (const char *line, TASK task);
+void task_execute(ENV e, TASK task);
 #endif //_TASK_H_

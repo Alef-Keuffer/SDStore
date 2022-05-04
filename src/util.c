@@ -6,20 +6,20 @@
 #include <errno.h>
 #include "util.h"
 
-int fifo_create_and_open (const char *path, mode_t permissions, int oflag)
+int fifo_create_or_open (const char *path, mode_t permissions, int oflag)
 {
-  if (access (path, F_OK) == -1)
-    { /*check if fifo already exists*/
+  if (access (path, F_OK) == -1) /*check if fifo already exists*/
+    {
       if (mkfifo (path, permissions))
         {
-          perror ("fifo_create_write failed at mkfifo");
+          perror ("fifo_create_write: failed at mkfifo");
           exit (EXIT_FAILURE);
         }
     }
   int fd = open (path, oflag);
   if (fd == -1)
     {
-      perror ("fifo_create_write failed at opening the fifo");
+      perror ("fifo_create_write: failed at opening the fifo");
       exit (EXIT_FAILURE);
     }
   return fd;
