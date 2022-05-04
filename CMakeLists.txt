@@ -2,27 +2,12 @@ cmake_minimum_required(VERSION 3.21)
 project(SDStore C)
 
 set(CMAKE_C_STANDARD 23)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror")
 
-add_library(env src/util/env.c src/util/env.h)
-
-add_library(util src/util.c src/util/env.h)
-
-add_library(transformation src/util/transformation.c src/util/transformation.h)
-target_link_libraries(transformation env)
-
-add_library(command src/util/command.c src/util/command.h)
-
-add_library(task src/util/task.c src/util/task.h)
-target_link_libraries(task command transformation)
-
-add_executable(sdstored src/sdstored.c src/sdstored.h)
-target_link_libraries(sdstored util)
-
-
-add_executable(sdstore src/sdstore.c src/sdstored.h)
-target_link_libraries(sdstore util)
+file(GLOB_RECURSE UTIL_LIBRARY_FILES src/util/*.c src/util/*.h)
+add_library(util ${UTIL_LIBRARY_FILES})
+link_libraries(util)
 
 add_executable(main src/main.c)
-target_link_libraries(main env util)
-
+add_executable(client src/client.c)
+add_executable(server src/server.c)
