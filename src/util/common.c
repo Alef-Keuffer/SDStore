@@ -38,7 +38,7 @@ char parseOp (const char* transformation_string)
 	}
 }
 
-const char *transformation_get_name (const char t)
+const char *transformation_get_name (const unsigned char t)
 {
   switch (t)
     {
@@ -56,7 +56,11 @@ const char *transformation_get_name (const char t)
 }
 
 void speakTo(const char* outFilename, char *ops) {
-	if (fork()) return;
+	if (fork())
+      {
+        wait(NULL);
+        return;
+      };
 
 	int n = 0;
 	while (ops[n++] != EOO);
@@ -70,14 +74,13 @@ void speakTo(const char* outFilename, char *ops) {
 	_exit(0);
 }
 
-static int notInterrupted = 1;
 static char FIFO[32];
 static void sig_handler(int signum){
-	signum++;
-	notInterrupted = 0;
+	signum++; // just for no error about unused variable
 	unlink(FIFO);
 	_exit(0);
 }
+
 
 void listenAs(const char* inFilename, void (*action) (char *), int isPassive) {
 	if (fork()) return;
@@ -87,6 +90,7 @@ void listenAs(const char* inFilename, void (*action) (char *), int isPassive) {
 
 	strcpy(FIFO,inFilename);
 	signal(SIGINT,sig_handler);
+
 	char c;
 	char buf[BUFSIZ];
 	size_t i = 0;
@@ -96,7 +100,7 @@ void listenAs(const char* inFilename, void (*action) (char *), int isPassive) {
 	fprintf(stderr,"Openend listening channel\n");
 
 	while (read(in,&c,1) > 0) {
-		buf[i++] = c;
+		buf[i++] = c; //is reading message
 
 		if (c == EOO) {
 			action(buf);

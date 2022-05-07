@@ -20,7 +20,7 @@ enum {
 char parseOp (const char* transformation_string);
 void speakTo(const char* outFilename, char *ops);
 void listenAs(const char* inFilename, void (*action) (char *), int isPassive);
-const char *transformation_get_name (const char t);
+const char *transformation_get_name (unsigned char t);
 char* toMessage(char *string);
 
 #endif //COMMON_H
