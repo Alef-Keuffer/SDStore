@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['example_20use_0',['Example use',['../index.html',1,'']]],
-  ['exec_1',['exec',['../server_8c.html#a64f211714646f225653c0c02f77acd0b',1,'server.c']]]
+  ['blockread_0',['blockRead',['../server_8c.html#aed148b61beb3fa4b7a946fe8eb6ca137',1,'server.c']]]
 ];
