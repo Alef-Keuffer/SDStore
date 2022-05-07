@@ -95,8 +95,9 @@ void listenAs(const char* inFilename, void (*action) (char *), int isPassive) {
 	char buf[BUFSIZ];
 	size_t i = 0;
 
+	int in;
 	reopen:
-	int in = open(inFilename,O_RDONLY);
+	in = open(inFilename,O_RDONLY);
 	fprintf(stderr,"Openend listening channel\n");
 
 	while (read(in,&c,1) > 0) {

@@ -66,14 +66,22 @@ pid_t pipe_progs (const char *m)
   const unsigned char s_dst = dst[-1];
   fprintf (stderr, "[%ld] pipe_progs: s_dst is %d\n", (long) getpid (), s_dst);
   const char *ops = dst + s_dst + 1;
+
   const int n = (unsigned char) ops[-1];
   fprintf (stderr, "[%ld] pipe_progs: number of ops is %d\n", (long) getpid (), n);
 
   int fd;
   int fds[n - 1][2];
 
-  if (n == 1)
-    {
+  for (int p = 0; p < n; p++) {
+      int res = pipe(fds[p]);
+      if (res < 0) {
+          perror("server: pipe creation failed");
+          return -1;
+      }
+  }
+
+  if (n == 1) {
       if (fork () != 0)
         {
           wait (NULL);
@@ -92,13 +100,11 @@ pid_t pipe_progs (const char *m)
       exec (ops[0]);
     }
 
-  for (int i = 0; i < n; i++)
-    {
-      if (i < n - 1)
-        {
+  for (int i = 0; i < n; i++) {
+      /*if (i < n - 1) {
           pipe (fds[i]);
           //fprintf (stderr, "[%ld]: (fds[%d],fds[%d])\n", (long) getpid (), 2 * i, 2 * i + 1);
-        }
+        }*/
       if (fork ())
         {
           int c = i % 2 ? 2 * (i - 1) : 2 * i + 1; //then close previous else close next
@@ -132,6 +138,7 @@ pid_t pipe_progs (const char *m)
           dup2 (fds[i][WRITE_END], STDOUT_FILENO);
           //fprintf (stderr, "[%ld]: fds[%d] → p_%d → fds[%d]\n", (long) getpid (), 2 * (i - 1), i, 2 * i + 1);
         }
+
       for (int j = 0; j < n - 1; ++i)
         {
           cclose (fds[j][READ_END]);
