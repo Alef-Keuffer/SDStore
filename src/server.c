@@ -346,7 +346,7 @@ pid_t dispatchTask (task_t *task)
   // update running
   increment_running_count (task);
 
-  task->monitor = pipe_progs (task->msg + 1 + (unsigned char) task->msg[0] + 1 + 1);
+  task->monitor = pipe_progs (task);
 }
 
 void free_task (task_t *task)
