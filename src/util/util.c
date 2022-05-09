@@ -13,20 +13,19 @@ int fifo_create_or_open (const char *path, mode_t permissions, int oflag)
       if (mkfifo (path, permissions))
         {
           perror ("fifo_create_write: failed at mkfifo");
-          exit (EXIT_FAILURE);
+          _exit (EXIT_FAILURE);
         }
     }
   int fd = open (path, oflag);
   if (fd == -1)
     {
       perror ("fifo_create_write: failed at opening the fifo");
-      exit (EXIT_FAILURE);
+      _exit (EXIT_FAILURE);
     }
   return fd;
 }
 
-
-ssize_t rread (int fd, void *buf, ssize_t nbytes)
+ssize_t my_read (int fd, void *buf, size_t nbytes)
 {
   ssize_t ret;
   ssize_t nread = 0;
@@ -37,7 +36,7 @@ ssize_t rread (int fd, void *buf, ssize_t nbytes)
           if (errno == EINTR)
             continue;
           perror ("read");
-          _exit(1);
+          _exit (1);
         }
       nread += ret;
       nbytes -= ret;
@@ -50,7 +49,7 @@ ssize_t readln (int fd, char buf[], ssize_t maxLength)
 {
   char c;
   ssize_t ret = 0;
-  for (unsigned int i = 0; i < maxLength && rread (fd, &c, 1) && c != '\n'; i++)
+  for (unsigned int i = 0; i < maxLength && my_read(fd, &c, 1) && c != '\n'; i++)
     {
       buf[i] = c;
       ret++;
@@ -60,35 +59,115 @@ ssize_t readln (int fd, char buf[], ssize_t maxLength)
 
 int oopen (const char *file, int oflag)
 {
-  int fd = open (file, oflag);
-  if (fd == -1) {
-    fprintf(stderr,"[%ld] ",(long)getpid());
-    perror ("oopen");
-    fprintf(stderr,"oopen failed with file: %s\n",file);
-    _exit(1);
-  }
-
+  const int fd = open (file, oflag);
+  if (fd == -1)
+    {
+      fprintf (stderr, "[%ld] ", (long) getpid ());
+      perror ("oopen");
+      fprintf (stderr, "oopen failed with file: %s\n", file);
+      _exit (EXIT_FAILURE);
+    }
   return fd;
 }
 
-int cclose (int fd)
+void cclose (int fd)
 {
-  int status = close (fd);
-  if (status) {
-    fprintf(stderr,"[%ld] ",(long)getpid());
-    perror ("cclose");
-    _exit(1);
-  }
-  return status;
+  const int status = close (fd);
+  if (status)
+    {
+      fprintf (stderr, "[%ld] ", (long) getpid ());
+      perror ("cclose");
+      _exit (EXIT_FAILURE);
+    }
 }
 
 int sstrtol (char *str)
 {
-  int r = (int) strtol (str, NULL, 10);
+  const int r = (int) strtol (str, NULL, 10);
   if (r <= 0)
     {
       perror ("sstrtol failed\n");
-      _exit (1);
+      _exit (EXIT_FAILURE);
     }
   return r;
+}
+
+pid_t ffork ()
+{
+  const pid_t pid = fork ();
+  if (pid < 0)
+    {
+      perror ("ffork");
+      _exit (EXIT_FAILURE);
+    }
+  return pid;
+}
+
+int ddup2 (int fildes, int fildes2)
+{
+  const int fd = dup2 (fildes, fildes2);
+  if (fd < 0)
+    {
+      perror ("ddup2");
+      _exit (EXIT_FAILURE);
+    }
+  return fd;
+}
+
+void eexecl (const char *path, const char *arg, ...)
+{
+  execl (path, arg);
+  perror ("execl");
+  _exit (EXIT_FAILURE);
+}
+
+int ppipe (int *pipedes)
+{
+  int fd = pipe (pipedes);
+  if (fd < 0)
+    {
+      perror ("ppipe");
+
+      _exit (EXIT_FAILURE);
+    }
+  return fd;
+}
+
+ssize_t rread (int fd, void *buf, size_t nbytes)
+{
+  const ssize_t r = read (fd, buf, nbytes);
+  if (r < 0)
+    {
+      perror ("rread");
+      _exit (EXIT_FAILURE);
+    }
+  return r;
+}
+
+ssize_t wwrite(int fd, const void *buf, size_t nbytes)
+{
+  const ssize_t r = write (fd, buf, nbytes);
+  if (r < 0)
+    {
+      perror ("rread");
+      _exit (EXIT_FAILURE);
+    }
+  return r;
+}
+
+void *mmalloc(size_t size) {
+  void *r = malloc(size);
+  if (r == NULL && size != 0) {
+    perror("mmalloc");
+    _exit (EXIT_FAILURE);
+  }
+  return r;
+}
+
+void mmkfifo(const char *path, mode_t mode) {
+  int r = mkfifo(path,mode);
+  if (r) {
+    perror ("mmkfifo");
+    _exit(EXIT_FAILURE);
+  }
 }
