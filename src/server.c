@@ -15,6 +15,9 @@
 static const int READ_END = 0;
 static const int WRITE_END = 1;
 
+#define READEND 0
+#define WRITEEND 1
+
 /*
 
 S - Size (0-255)
@@ -309,6 +312,142 @@ pid_t pipe_progs (const task_t *task)
 
   while (waitpid (-1, NULL, 0) > 0)
     {
+      fprintf (stderr, "pipe_progs: waited\n");
+    }
+  fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
+  _exit (0);
+}
+
+
+pid_t pipe_progs_ultimate (const task_t *task)
+{
+  fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
+  int wpid;
+  if ((wpid = fork ()) != 0)
+    return wpid;
+  const char *src = task->src;
+  const char *dst = task->dst;
+  const char *ops = task->ops;
+  const int program_num = task->num_ops;
+
+  int fd;
+  int pips[program_num - 1][2];
+
+  // Se só houver um programa.
+  if (program_num == 1) {
+      if (fork () != 0)
+        {
+          wait (NULL);
+          _exit (0);
+        }
+
+      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
+
+      fd = open (src, O_RDONLY);
+      dup2 (fd, STDIN_FILENO);
+      cclose (fd);
+
+      fd = oopen (dst, O_WRONLY);
+      dup2 (fd, STDOUT_FILENO);
+      cclose (fd);
+      exec (ops[0]);
+    }
+
+    int dup_res;
+    int pipe_res;
+
+    for (int cs = 0; cs < program_num; cs++) {
+        if (cs == 0) {
+            pipe_res = pipe(pips[cs]);
+            if (pipe_res < 0) {
+                perror("main: pipe creation failed");
+                return 1;
+            }
+
+            pid_t child = fork();
+            switch(child) {
+                case -1:
+                    perror("fork failed");
+                    return -1;
+
+                case 0:
+                    close(pips[cs][READEND]);
+                    dup_res = dup2(pips[cs][WRITEEND], STDOUT_FILENO);
+                    close(pips[cs][WRITEEND]);
+
+                    if (dup_res < 0) {
+                        perror("dup2 failed");
+                        _exit(1);
+                    }
+                    exec (ops[cs]);
+
+                default:
+                    close(pips[cs][WRITEEND]);
+            }
+        }
+
+        if ((cs > 0) && (cs < (program_num - 1))) {
+            pipe_res = pipe(pips[cs]);
+            if (pipe_res < 0) {
+                perror("main: pipe creation failed");
+                return 1;
+            }
+
+            pid_t child = fork();
+            switch(child) {
+                case -1:
+                    perror("fork failed");
+                    return -1;
+                case 0:
+                    close(pips[cs][READEND]);
+
+                    dup_res = dup2(pips[cs][WRITEEND], STDOUT_FILENO);
+                    if (dup_res < 0) {
+                        perror("dup2 failed");
+                        _exit(1);
+                    }
+                    close(pips[cs][WRITEEND]);
+
+                    dup_res = dup2(pips[cs - 1][READEND], STDIN_FILENO);
+                    if (dup_res < 0) {
+                        perror("dup2 failed");
+                        _exit(1);
+                    }
+                    close(pips[cs - 1][READEND]);
+
+                    exec (ops[cs]);
+
+                default:
+                    close(pips[cs][WRITEEND]);
+                    close(pips[cs - 1][READEND]);
+            }
+        }
+
+        if (cs == (program_num - 1)) {
+            pid_t child = fork();
+            switch (child) {
+                case -1:
+                    perror("fork failed");
+                    return -1;
+                case 0:
+                    dup_res = dup2(pips[cs - 1][READEND], STDIN_FILENO);
+                    if (dup_res < 0) {
+                        perror("dup2 failed");
+                        _exit(1);
+                    }
+                    close(pips[cs - 1][READEND]);
+
+                    exec (ops[cs]);
+
+                default:
+                    close(pips[cs - 1][READEND]);
+            }
+        }
+    }
+
+
+
+  while (waitpid (-1, NULL, 0) > 0) {
       fprintf (stderr, "pipe_progs: waited\n");
     }
   fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
