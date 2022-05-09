@@ -50,25 +50,185 @@ void exec (const char op)
   perror ("execl");
 }
 
-pid_t pipe_progs (const char *m)
+int pipe_progs_original (const char *m)
+{
+  /*m ≡ S ⟨src⟩ S ⟨dst⟩ S ⟨op⟩⁺*/
+  const char *src = m + 1;
+  fprintf (stderr, "pipe_progs: src is %s\n", src);
+  const unsigned char s_src = src[-1];
+  fprintf (stderr, "pipe_progs: s_src is %d\n", s_src);
+  const char *dst = src + s_src + 1;
+  fprintf (stderr, "pipe_progs: dst is %s\n", dst);
+  const unsigned char s_dst = dst[-1];
+  fprintf (stderr, "pipe_progs: s_dst is %d\n", s_dst);
+  const char *ops = dst + s_dst + 1;
+  const int n = (unsigned char) ops[-1];
+  fprintf (stderr, "pipe_progs: number of ops is %d\n", n);
+
+  int fd;
+  int fds[2 * (n - 1)];
+
+
+  if (n == 1)
+    {
+      if (fork () != 0)
+        return 0;
+
+      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
+
+      fd = open (src, O_RDONLY);
+      dup2 (fd, STDIN_FILENO);
+      close (fd);
+
+      fd = open (dst, O_WRONLY);
+      dup2 (fd, STDOUT_FILENO);
+      close (fd);
+      exec (ops[0]);
+    }
+
+  for (int i = 0; i < n; i++)
+    {
+      if (i < n - 1)
+        {
+          pipe (fds + 2 * i);
+          fprintf (stderr, "[%ld]: (fds[%d],fds[%d])\n", (long) getpid (), 2 * i, 2 * i + 1);
+        }
+      if (fork () != 0) {
+        int c = i%2 ? 2*(i-1) : 2*i+1; //then close previous else close next
+        close(fds[c]);
+        fprintf (stderr, "[%ld]: close(fds[%d])\n", (long) getpid (),c);
+        continue;
+      }
+      if (i == 0)
+        {
+          close (fds[2 * i]);
+          fd = open (src, O_RDONLY);
+          dup2 (fd, 0);
+          close (fd);
+          dup2 (fds[2 * i + 1], 1);
+          fprintf (stderr, "[%ld]: %s → p_0 → fds[%d]\n", (long) getpid (), src, 2 * i + 1);
+        }
+      else if (i == n - 1)
+        {
+          close (fds[2 * i - 1]);
+          fd = open (dst, O_WRONLY);
+          dup2 (fd, 1);
+          close (fd);
+          dup2 (fds[2 * (i - 1)], 0);
+          fprintf (stderr, "[%ld]: fds[%d] → p_%d → %s\n", (long) getpid (), 2 * (i - 1), i, dst);
+        }
+      else
+        {
+          dup2 (fds[2 * (i - 1)], 0);
+          dup2 (fds[2 * i + 1], 1);
+          fprintf (stderr, "[%ld]: fds[%d] → p_%d → fds[%d]\n", (long) getpid (), 2 * (i - 1), i, 2 * i + 1);
+        }
+      exec (ops[i]);
+    }
+  return 0;
+}
+
+pid_t pipe_progs2 (const task_t * task)
+{
+  fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
+  int monitor_pid;
+  if ((monitor_pid = fork ()))
+    return monitor_pid;
+
+  const char *src = task->src;
+  const char *dst = task->dst;
+  const char *ops = task->ops;
+  const int n = task->num_ops;
+
+  int fd;
+  int fds[n - 1][2];
+
+  if (n == 1)
+    {
+      if (fork () != 0)
+        {
+          wait (NULL);
+          _exit (0);
+        }
+
+      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
+
+      fd = open (src, O_RDONLY);
+      dup2 (fd, STDIN_FILENO);
+      cclose (fd);
+
+      fd = oopen (dst, O_WRONLY);
+      dup2 (fd, STDOUT_FILENO);
+      cclose (fd);
+      exec (ops[0]);
+    }
+
+  for (int i = 0; i < n; i++)
+    {
+      if (i < n - 1)
+        {
+          pipe (fds[i]);
+          //fprintf (stderr, "[%ld]: (fds[%d],fds[%d])\n", (long) getpid (), 2 * i, 2 * i + 1);
+        }
+      if (fork ())
+        {
+          int c = i % 2 ? 2 * (i - 1) : 2 * i + 1; //then close previous else close next
+          fprintf (stderr, "[%ld]: closing(fds[%d])\n", (long) getpid (), c);
+          cclose (fds[c]);
+          fprintf (stderr, "[%ld]: closed(fds[%d])\n", (long) getpid (), c);
+          continue;
+        }
+      if (i == 0)
+        {
+          cclose (fds[0][READ_END]);
+          fd = oopen (src, O_RDONLY);
+          dup2 (fd, STDIN_FILENO);
+          cclose (fd);
+          dup2 (fds[0][WRITE_END], STDOUT_FILENO);
+          //fprintf (stderr, "[%ld]: %s → p_0 → fds[%d]\n", (long) getpid (), src, 2 * i + 1);
+        }
+      else if (i == n - 1)
+        {
+          //fprintf (stderr, "[%ld]: closing(fds[%d])\n", (long) getpid (), 2*i-1);
+          cclose (fds[n - 1][WRITE_END]);
+          fd = oopen (dst, O_WRONLY);
+          dup2 (fd, STDOUT_FILENO);
+          cclose (fd);
+          dup2 (fds[n - 1][READ_END], STDIN_FILENO);
+          //fprintf (stderr, "[%ld]: fds[%d] → p_%d → %s\n", (long) getpid (), 2 * (i - 1), i, dst);
+        }
+      else
+        {
+          dup2 (fds[i - 1][READ_END], STDIN_FILENO);
+          dup2 (fds[i][WRITE_END], STDOUT_FILENO);
+          //fprintf (stderr, "[%ld]: fds[%d] → p_%d → fds[%d]\n", (long) getpid (), 2 * (i - 1), i, 2 * i + 1);
+        }
+      for (int j = 0; j < n - 1; ++i)
+        {
+          cclose (fds[j][READ_END]);
+          cclose (fds[j][WRITE_END]);
+        }
+      exec (ops[i]);
+    }
+
+  while (waitpid (-1, NULL, 0) > 0)
+    {
+      fprintf (stderr, "pipe_progs: waited\n");
+    }
+  fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
+  _exit (0);
+}
+
+pid_t pipe_progs (const task_t *task)
 {
   fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
   int wpid;
   if ((wpid = fork ()) != 0)
     return wpid;
-  /*m ≡ S ⟨src⟩ S ⟨dst⟩ S ⟨op⟩⁺*/
-  const char *src = m + 1;
-  fprintf (stderr, "[%ld] pipe_progs: src is %s\n", (long) getpid (), src);
-  const unsigned char s_src = src[-1];
-  fprintf (stderr, "[%ld] pipe_progs: s_src is %d\n", (long) getpid (), s_src);
-  const char *dst = src + s_src + 1;
-  fprintf (stderr, "[%ld] pipe_progs: dst is %s\n", (long) getpid (), dst);
-  const unsigned char s_dst = dst[-1];
-  fprintf (stderr, "[%ld] pipe_progs: s_dst is %d\n", (long) getpid (), s_dst);
-  const char *ops = dst + s_dst + 1;
-
-  const int n = (unsigned char) ops[-1];
-  fprintf (stderr, "[%ld] pipe_progs: number of ops is %d\n", (long) getpid (), n);
+  const char *src = task->src;
+  const char *dst = task->dst;
+  const char *ops = task->ops;
+  const int n = task->num_ops;
 
   int fd;
   int fds[n - 1][2];
