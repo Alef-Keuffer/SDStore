@@ -11,19 +11,20 @@
 #include "_server.h"
 #include "util/taskQueue.h"
 #include "util/util.h"
-
+#include <assert.h>
 static const int READ_END = 0;
 static const int WRITE_END = 1;
 
-#define READEND 0
-#define WRITEEND 1
-
 /*
+task_message :: =
+    ⟨size⟩ ⟨client_pid_str⟩ ⟨proc-file⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
+  | ⟨size⟩ ⟨client_pid_str⟩ ⟨status⟩ ⟨EOO⟩
 
-S - Size (0-255)
+⟨size⟩ ::= ⟨int⟩
 
-S ⟨PID⟩ S ⟨src⟩ S ⟨dst⟩ S ⟨op⟩⁺
-
+maybe unused:
+priority,arrival_time ← {t ∣ t.priority     = max(priorities(tasks))
+                           ∧ t.arrival_date = min({q ∈ tasks ∣ q.priority = t.priority}) }
 */
 
 struct {
@@ -51,280 +52,16 @@ void exec (const char op)
   fprintf (stderr, "[%ld]: execl(%s)\n", (long) getpid (), command);
   execl (command, op_name, (char *) NULL);
   perror ("execl");
-}
-
-int pipe_progs_original (const char *m)
-{
-  /*m ≡ S ⟨src⟩ S ⟨dst⟩ S ⟨op⟩⁺*/
-  const char *src = m + 1;
-  fprintf (stderr, "pipe_progs: src is %s\n", src);
-  const unsigned char s_src = src[-1];
-  fprintf (stderr, "pipe_progs: s_src is %d\n", s_src);
-  const char *dst = src + s_src + 1;
-  fprintf (stderr, "pipe_progs: dst is %s\n", dst);
-  const unsigned char s_dst = dst[-1];
-  fprintf (stderr, "pipe_progs: s_dst is %d\n", s_dst);
-  const char *ops = dst + s_dst + 1;
-  const int n = (unsigned char) ops[-1];
-  fprintf (stderr, "pipe_progs: number of ops is %d\n", n);
-
-  int fd;
-  int fds[2 * (n - 1)];
-
-
-  if (n == 1)
-    {
-      if (fork () != 0)
-        return 0;
-
-      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
-
-      fd = open (src, O_RDONLY);
-      dup2 (fd, STDIN_FILENO);
-      close (fd);
-
-      fd = open (dst, O_WRONLY);
-      dup2 (fd, STDOUT_FILENO);
-      close (fd);
-      exec (ops[0]);
-    }
-
-  for (int i = 0; i < n; i++)
-    {
-      if (i < n - 1)
-        {
-          pipe (fds + 2 * i);
-          fprintf (stderr, "[%ld]: (fds[%d],fds[%d])\n", (long) getpid (), 2 * i, 2 * i + 1);
-        }
-      if (fork () != 0) {
-        int c = i%2 ? 2*(i-1) : 2*i+1; //then close previous else close next
-        close(fds[c]);
-        fprintf (stderr, "[%ld]: close(fds[%d])\n", (long) getpid (),c);
-        continue;
-      }
-      if (i == 0)
-        {
-          close (fds[2 * i]);
-          fd = open (src, O_RDONLY);
-          dup2 (fd, 0);
-          close (fd);
-          dup2 (fds[2 * i + 1], 1);
-          fprintf (stderr, "[%ld]: %s → p_0 → fds[%d]\n", (long) getpid (), src, 2 * i + 1);
-        }
-      else if (i == n - 1)
-        {
-          close (fds[2 * i - 1]);
-          fd = open (dst, O_WRONLY);
-          dup2 (fd, 1);
-          close (fd);
-          dup2 (fds[2 * (i - 1)], 0);
-          fprintf (stderr, "[%ld]: fds[%d] → p_%d → %s\n", (long) getpid (), 2 * (i - 1), i, dst);
-        }
-      else
-        {
-          dup2 (fds[2 * (i - 1)], 0);
-          dup2 (fds[2 * i + 1], 1);
-          fprintf (stderr, "[%ld]: fds[%d] → p_%d → fds[%d]\n", (long) getpid (), 2 * (i - 1), i, 2 * i + 1);
-        }
-      exec (ops[i]);
-    }
-  return 0;
-}
-
-pid_t pipe_progs2 (const task_t * task)
-{
-  fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
-  int monitor_pid;
-  if ((monitor_pid = fork ()))
-    return monitor_pid;
-
-  const char *src = task->src;
-  const char *dst = task->dst;
-  const char *ops = task->ops;
-  const int n = task->num_ops;
-
-  int fd;
-  int fds[n - 1][2];
-
-  if (n == 1)
-    {
-      if (fork () != 0)
-        {
-          wait (NULL);
-          _exit (0);
-        }
-
-      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
-
-      fd = open (src, O_RDONLY);
-      dup2 (fd, STDIN_FILENO);
-      cclose (fd);
-
-      fd = oopen (dst, O_WRONLY);
-      dup2 (fd, STDOUT_FILENO);
-      cclose (fd);
-      exec (ops[0]);
-    }
-
-  for (int i = 0; i < n; i++)
-    {
-      if (i < n - 1)
-        {
-          pipe (fds[i]);
-          //fprintf (stderr, "[%ld]: (fds[%d],fds[%d])\n", (long) getpid (), 2 * i, 2 * i + 1);
-        }
-      if (fork ())
-        {
-          int c = i % 2 ? 2 * (i - 1) : 2 * i + 1; //then close previous else close next
-          fprintf (stderr, "[%ld]: closing(fds[%d])\n", (long) getpid (), c);
-          cclose (fds[c]);
-          fprintf (stderr, "[%ld]: closed(fds[%d])\n", (long) getpid (), c);
-          continue;
-        }
-      if (i == 0)
-        {
-          cclose (fds[0][READ_END]);
-          fd = oopen (src, O_RDONLY);
-          dup2 (fd, STDIN_FILENO);
-          cclose (fd);
-          dup2 (fds[0][WRITE_END], STDOUT_FILENO);
-          //fprintf (stderr, "[%ld]: %s → p_0 → fds[%d]\n", (long) getpid (), src, 2 * i + 1);
-        }
-      else if (i == n - 1)
-        {
-          //fprintf (stderr, "[%ld]: closing(fds[%d])\n", (long) getpid (), 2*i-1);
-          cclose (fds[n - 1][WRITE_END]);
-          fd = oopen (dst, O_WRONLY);
-          dup2 (fd, STDOUT_FILENO);
-          cclose (fd);
-          dup2 (fds[n - 1][READ_END], STDIN_FILENO);
-          //fprintf (stderr, "[%ld]: fds[%d] → p_%d → %s\n", (long) getpid (), 2 * (i - 1), i, dst);
-        }
-      else
-        {
-          dup2 (fds[i - 1][READ_END], STDIN_FILENO);
-          dup2 (fds[i][WRITE_END], STDOUT_FILENO);
-          //fprintf (stderr, "[%ld]: fds[%d] → p_%d → fds[%d]\n", (long) getpid (), 2 * (i - 1), i, 2 * i + 1);
-        }
-      for (int j = 0; j < n - 1; ++i)
-        {
-          cclose (fds[j][READ_END]);
-          cclose (fds[j][WRITE_END]);
-        }
-      exec (ops[i]);
-    }
-
-  while (waitpid (-1, NULL, 0) > 0)
-    {
-      fprintf (stderr, "pipe_progs: waited\n");
-    }
-  fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
-  _exit (0);
+  _exit (EXIT_FAILURE);
 }
 
 pid_t pipe_progs (const task_t *task)
 {
   fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
-  int wpid;
-  if ((wpid = fork ()) != 0)
-    return wpid;
-  const char *src = task->src;
-  const char *dst = task->dst;
-  const char *ops = task->ops;
-  const int n = task->num_ops;
+  int monitor_pid;
+  if ((monitor_pid = fork ()) != 0)
+    return monitor_pid;
 
-  int fd;
-  int fds[n - 1][2];
-
-  for (int p = 0; p < n; p++) {
-      int res = pipe(fds[p]);
-      if (res < 0) {
-          perror("server: pipe creation failed");
-          return -1;
-      }
-  }
-
-  if (n == 1) {
-      if (fork () != 0)
-        {
-          wait (NULL);
-          _exit (0);
-        }
-
-      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
-
-      fd = open (src, O_RDONLY);
-      dup2 (fd, STDIN_FILENO);
-      cclose (fd);
-
-      fd = oopen (dst, O_WRONLY);
-      dup2 (fd, STDOUT_FILENO);
-      cclose (fd);
-      exec (ops[0]);
-    }
-
-  for (int i = 0; i < n; i++) {
-      /*if (i < n - 1) {
-          pipe (fds[i]);
-          //fprintf (stderr, "[%ld]: (fds[%d],fds[%d])\n", (long) getpid (), 2 * i, 2 * i + 1);
-        }*/
-      if (fork ())
-        {
-          int c = i % 2 ? 2 * (i - 1) : 2 * i + 1; //then close previous else close next
-          fprintf (stderr, "[%ld]: closing(fds[%d])\n", (long) getpid (), c);
-          //cclose (fds[c]);
-          fprintf (stderr, "[%ld]: closed(fds[%d])\n", (long) getpid (), c);
-          continue;
-        }
-      if (i == 0)
-        {
-          cclose (fds[0][READ_END]);
-          fd = oopen (src, O_RDONLY);
-          dup2 (fd, STDIN_FILENO);
-          cclose (fd);
-          dup2 (fds[0][WRITE_END], STDOUT_FILENO);
-          //fprintf (stderr, "[%ld]: %s → p_0 → fds[%d]\n", (long) getpid (), src, 2 * i + 1);
-        }
-      else if (i == n - 1)
-        {
-          //fprintf (stderr, "[%ld]: closing(fds[%d])\n", (long) getpid (), 2*i-1);
-          cclose (fds[n - 1][WRITE_END]);
-          fd = oopen (dst, O_WRONLY);
-          dup2 (fd, STDOUT_FILENO);
-          cclose (fd);
-          dup2 (fds[n - 1][READ_END], STDIN_FILENO);
-          //fprintf (stderr, "[%ld]: fds[%d] → p_%d → %s\n", (long) getpid (), 2 * (i - 1), i, dst);
-        }
-      else
-        {
-          dup2 (fds[i - 1][READ_END], STDIN_FILENO);
-          dup2 (fds[i][WRITE_END], STDOUT_FILENO);
-          //fprintf (stderr, "[%ld]: fds[%d] → p_%d → fds[%d]\n", (long) getpid (), 2 * (i - 1), i, 2 * i + 1);
-        }
-
-      for (int j = 0; j < n - 1; ++i)
-        {
-          cclose (fds[j][READ_END]);
-          cclose (fds[j][WRITE_END]);
-        }
-      exec (ops[i]);
-    }
-
-  while (waitpid (-1, NULL, 0) > 0)
-    {
-      fprintf (stderr, "pipe_progs: waited\n");
-    }
-  fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
-  _exit (0);
-}
-
-
-pid_t pipe_progs_ultimate (const task_t *task)
-{
-  fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
-  int wpid;
-  if ((wpid = fork ()) != 0)
-    return wpid;
   const char *src = task->src;
   const char *dst = task->dst;
   const char *ops = task->ops;
@@ -333,125 +70,85 @@ pid_t pipe_progs_ultimate (const task_t *task)
   int fd;
   int pips[program_num - 1][2];
 
-  // Se só houver um programa.
-  if (program_num == 1) {
-      if (fork () != 0)
+  const int last = program_num - 1;
+
+  // If there is only one transformation
+  if (program_num == 1)
+    {
+      if (ffork () != 0)
         {
           wait (NULL);
-          _exit (0);
+          _exit (EXIT_SUCCESS);
         }
 
       fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
 
-      fd = open (src, O_RDONLY);
-      dup2 (fd, STDIN_FILENO);
+      fd = oopen (src, O_RDONLY);
+      ddup2 (fd, STDIN_FILENO);
       cclose (fd);
 
       fd = oopen (dst, O_WRONLY);
-      dup2 (fd, STDOUT_FILENO);
+      ddup2 (fd, STDOUT_FILENO);
       cclose (fd);
       exec (ops[0]);
     }
 
-    int dup_res;
-    int pipe_res;
+  for (int cs = 0; cs < program_num; cs++)
+    {
+      if (cs != last)
+        ppipe (pips[cs]);
+      if (ffork ())
+        if (cs == 0)
+          cclose (pips[cs][WRITE_END]);
+        else if (cs == last)
+          cclose (pips[cs - 1][READ_END]);
+        else
+          {
+            cclose (pips[cs][WRITE_END]);
+            cclose (pips[cs - 1][READ_END]);
+          }
+      else
+        {
+          if (cs == 0)
+            {
+              cclose (pips[cs][READ_END]);
 
-    for (int cs = 0; cs < program_num; cs++) {
-        if (cs == 0) {
-            pipe_res = pipe(pips[cs]);
-            if (pipe_res < 0) {
-                perror("main: pipe creation failed");
-                return 1;
+              fd = oopen (src, O_RDONLY);
+              ddup2 (fd, STDIN_FILENO);
+              cclose (fd);
+
+              ddup2 (pips[cs][WRITE_END], STDOUT_FILENO);
+              cclose (pips[cs][WRITE_END]);
+              exec (ops[cs]);
             }
+          else if (cs == last)
+            {
+              fd = oopen (dst, O_WRONLY);
+              ddup2 (fd, STDOUT_FILENO);
+              cclose (fd);
 
-            pid_t child = fork();
-            switch(child) {
-                case -1:
-                    perror("fork failed");
-                    return -1;
-
-                case 0:
-                    close(pips[cs][READEND]);
-                    dup_res = dup2(pips[cs][WRITEEND], STDOUT_FILENO);
-                    close(pips[cs][WRITEEND]);
-
-                    if (dup_res < 0) {
-                        perror("dup2 failed");
-                        _exit(1);
-                    }
-                    exec (ops[cs]);
-
-                default:
-                    close(pips[cs][WRITEEND]);
+              ddup2 (pips[cs - 1][READ_END], STDIN_FILENO);
+              cclose (pips[cs - 1][READ_END]);
+              exec (ops[cs]);
             }
-        }
-
-        if ((cs > 0) && (cs < (program_num - 1))) {
-            pipe_res = pipe(pips[cs]);
-            if (pipe_res < 0) {
-                perror("main: pipe creation failed");
-                return 1;
-            }
-
-            pid_t child = fork();
-            switch(child) {
-                case -1:
-                    perror("fork failed");
-                    return -1;
-                case 0:
-                    close(pips[cs][READEND]);
-
-                    dup_res = dup2(pips[cs][WRITEEND], STDOUT_FILENO);
-                    if (dup_res < 0) {
-                        perror("dup2 failed");
-                        _exit(1);
-                    }
-                    close(pips[cs][WRITEEND]);
-
-                    dup_res = dup2(pips[cs - 1][READEND], STDIN_FILENO);
-                    if (dup_res < 0) {
-                        perror("dup2 failed");
-                        _exit(1);
-                    }
-                    close(pips[cs - 1][READEND]);
-
-                    exec (ops[cs]);
-
-                default:
-                    close(pips[cs][WRITEEND]);
-                    close(pips[cs - 1][READEND]);
-            }
-        }
-
-        if (cs == (program_num - 1)) {
-            pid_t child = fork();
-            switch (child) {
-                case -1:
-                    perror("fork failed");
-                    return -1;
-                case 0:
-                    dup_res = dup2(pips[cs - 1][READEND], STDIN_FILENO);
-                    if (dup_res < 0) {
-                        perror("dup2 failed");
-                        _exit(1);
-                    }
-                    close(pips[cs - 1][READEND]);
-
-                    exec (ops[cs]);
-
-                default:
-                    close(pips[cs - 1][READEND]);
+          else
+            {
+              cclose (pips[cs][READ_END]);
+              ddup2 (pips[cs][WRITE_END], STDOUT_FILENO);
+              cclose (pips[cs][WRITE_END]);
+              ddup2 (pips[cs - 1][READ_END], STDIN_FILENO);
+              cclose (pips[cs - 1][READ_END]);
+              exec (ops[cs]);
             }
         }
     }
 
-
-
-  while (waitpid (-1, NULL, 0) > 0) {
-      fprintf (stderr, "pipe_progs: waited\n");
+  while (waitpid (-1, NULL, 0) > 0)
+    {
+      fprintf (stderr, "[%ld] pipe_progs: waited\n", (long) getpid ());
     }
   fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
-  _exit (0);
+  _exit (EXIT_SUCCESS);
 }
 
 int is_task_possible (const task_t *task)
@@ -479,7 +176,7 @@ pid_t dispatchTask (task_t *task)
 {
   const char *CLIENT = task->client_pid_str;
   int fd = oopen (CLIENT, O_WRONLY);
-  write (fd, "processing\n", 11);
+  wwrite (fd, "processing\n", 11);
   cclose (fd);
 
   // update running
@@ -500,7 +197,7 @@ void free_task (task_t *task)
 
 task_t *get_task (const char *m)
 {
-  // m ≡ S ⟨client_pid⟩ ⟨proc-file⟩ ⟨priority⟩ S ⟨src⟩ S ⟨dst⟩ S ⟨ops⟩⁺ ⟨EOO⟩
+  // m ≡ ⟨size⟩ ⟨client_pid_str⟩ ⟨proc-file⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
   task_t *task = malloc (sizeof (task_t));
 
   const char *pid_str = m + 1;
@@ -531,7 +228,19 @@ task_t *get_task (const char *m)
   memcpy (task->ops, ops, num_ops);
   task->num_ops = num_ops;
   task->pri = priority;
-  const int msg_size = 1 + pid_str_size + 1 + 1 + 1 + s_src + 1 + s_dst + 1 + num_ops + 1;
+  // ⟨size⟩ ⟨client_pid_str⟩ ⟨proc-file⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
+  const int msg_size =
+      1 // ⟨size⟩
+      + pid_str_size // ⟨client_pid_str⟩
+      + 1 // ⟨proc-file⟩
+      + 1 // ⟨priority⟩
+      + 1 // ⟨size⟩
+      + s_src // ⟨src⟩
+      + 1 // ⟨size⟩
+      + s_dst // ⟨dst⟩
+      + 1 // ⟨size⟩
+      + num_ops // ⟨ops⟩⁺
+      + 1; // ⟨EOO⟩
   task->msg = malloc (msg_size);
   memcpy (task->msg, m, msg_size);
 
@@ -544,20 +253,55 @@ task_t *get_task (const char *m)
   return task;
 }
 
-void blockRead (char *m)
+size_t get_status_str (char stats[BUFSIZ])
 {
-  fprintf (stderr, "[%ld] blockRead\n", (long) getpid ());
-  char c;
-  size_t i = 0;
-  g.serverFifo = open (SERVER, O_RDONLY);
-  while (read (g.serverFifo, &c, 1) >= 0)
+  stats[0] = 0;
+  char buf[BUFSIZ];
+  snprintf (buf, BUFSIZ, "Number of running tasks: %d\n", num_running_tasks);
+  strcat (stats, buf);
+  for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
     {
-      m[i++] = c; //is reading message
-
-      if (c == EOO) //end of a message, there might be more in the pipe
-        break;
+      snprintf (buf, BUFSIZ, "%s : %d\n", transformation_get_name (i), globalRunning[i]);
+      strcat (stats, buf);
     }
-  close (g.serverFifo);
+  strcat (stats, "\x80");
+  return strlen (stats);
+}
+
+void deal_with_message (char *m)
+{
+  char *client = m + 1;
+  if (m[m[0] + 1] == STATUS)
+    {
+      char status[BUFSIZ];
+      const size_t n = get_status_str (status);
+      const int fd = oopen (client, O_WRONLY);
+      wwrite (fd, status, n);
+      cclose (fd);
+      fprintf (stderr, "[%ld] status: for client %s\n", (long) getpid (), client);
+    }
+  else
+    {
+      task_t *task = get_task (m);
+      pqueue_insert (globalQueue, task);
+      int fd = oopen (task->client_pid_str, O_WRONLY);
+      wwrite (fd, "pending\n", 8);
+      cclose (fd);
+    }
+}
+
+void blockRead ()
+{
+  char m[BUFSIZ];
+  fprintf (stderr, "[%ld] blockRead\n", (long) getpid ());
+  size_t nbytes;
+
+  // assume client requests will not fill pipe buffer
+  nbytes = rread (g.serverFifo, m, BUFSIZ);
+  assert(nbytes < BUFSIZ);
+  for (size_t i = 0; i < nbytes; ++i)
+    if (i == 0 || m[i - 1] == EOO)
+      deal_with_message (m + i);
 }
 void decrement_running_count (const task_t *task)
 {
@@ -574,58 +318,24 @@ int next_pos (const int maxTasks, task_t *pid[maxTasks])
   return i;
 }
 
-void get_status_str (char stats[BUFSIZ])
+inline int queue_is_empty ()
 {
-  stats[0] = 0;
-  char buf[BUFSIZ];
-  snprintf (buf, BUFSIZ, "Number of running tasks: %d\n", num_running_tasks);
-  strcat (stats, buf);
-  for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
-    {
-      snprintf (buf, BUFSIZ, "%s : %d\n", transformation_get_name (i), globalRunning[i]);
-      strcat (stats, buf);
-    }
-  strcat (stats, "\x80");
-}
-
-int queue_is_empty ()
-{
-  if (globalQueue->size <= 1)
-    return 1;
-  return 0;
+  return pqueue_size(globalQueue) == 0;
 }
 
 void listening_loop ()
 {
   fprintf (stderr, "[%ld] listening_loop\n", (long) getpid ());
-  char m[BUFSIZ];
+
   const int maxTasks = 100; //node -> {data = {pid_executioner,t0,t1,t2,t3,t4,t5,t6,pid_client}, node_t* next}
   task_t *pid[maxTasks]; //{pid,t0,t1,t2,t3,t4,t5,t6,pid_client}
   for (int i = 0; i < maxTasks; ++i)
     pid[i] = NULL;
-  int wpid;
 
   while (1)
     {
-      while (!g.hasBeenInterrupted && queue_is_empty ())
-        {
-          blockRead (m);
-          char *client = m + 1;
-          if (m[m[0] + 1] == STATUS)
-            {
-              char status[BUFSIZ];
-              get_status_str (status);
-              speakTo (client, status);
-            }
-          else
-            {
-              task_t *task = get_task (m);
-              pqueue_insert (globalQueue, task);
-              int fd = oopen (task->client_pid_str, O_WRONLY);
-              write (fd, "pending\n", 8);
-              cclose (fd);
-            }
-        }
+      while (!g.hasBeenInterrupted && queue_is_empty () && num_running_tasks == 0)
+        blockRead ();
 
       if (g.hasBeenInterrupted && queue_is_empty () && num_running_tasks == 0)
         break;
@@ -648,19 +358,32 @@ void listening_loop ()
       if (num_running_tasks > 0)
         {
           // {runningLimit}
-          wpid = wait (NULL);
-          fprintf (stderr, "[%ld] listening_loop: wpid = %d\n", (long) getpid (), wpid);
+          int monitor_pid = wait (NULL);
+          fprintf (stderr, "[%ld] listening_loop: monitor_pid = %d\n", (long) getpid (), monitor_pid);
           int j = 0;
-          for (; j < maxTasks && pid[j]->monitor != wpid; j++);
+          for (; j < maxTasks && pid[j]->monitor != monitor_pid; j++);
           decrement_running_count (pid[j]);
           const char *client = pid[j]->client_pid_str;
 
-          int fd = oopen (client, O_WRONLY);
-          write (fd, "completed\n", 10);
+          int fd = oopen (pid[j]->src, O_RDONLY);
+          const off_t bytes_input = lseek (fd, 0, SEEK_END);
           cclose (fd);
+
+          fd = oopen (pid[j]->dst, O_RDONLY);
+          const off_t bytes_output = lseek (fd, 0, SEEK_END);
+          cclose (fd);
+
+          char completed_message[200];
+          int completed_message_length = snprintf (completed_message, 200, "completed (bytes-input: %ld, bytes-output: %ld)\n", bytes_input, bytes_output);
+
           fd = oopen (client, O_WRONLY);
-          char c = '\x80';
-          write (fd, &c, 1);
+          wwrite (fd, completed_message, completed_message_length);
+          cclose (fd);
+
+          // this is used to indicate to the client that it can close its listening channel
+          const char c = '\x80';
+          fd = oopen (client, O_WRONLY);
+          wwrite (fd, &c, 1);
           cclose (fd);
 
           free_task (pid[j]);
@@ -682,14 +405,15 @@ static void sig_handler (int signum)
 int main (int argc, char *argv[])
 {
   (void) argc; /* unused parameter */
-  fprintf (stderr, "[%ld] loading config...\n", (long) getpid ());
+  fprintf (stderr, "[%ld] loading config...\n\n", (long) getpid ());
   char buf[BUFSIZ];
   const char *configFilename = argv[1];
   int fd = oopen (configFilename, O_RDONLY);
   rread (fd, buf, BUFSIZ);
   cclose (fd);
-  fprintf (stderr, "[%ld] config payload:\n'''\n%s\n'''\n", (long) getpid (), buf);
+  fprintf (stderr, "[%ld] config payload:\n\n```\n%s\n```\n\n", (long) getpid (), buf);
 
+  // if a file with the same name as our fifo exists we delete it
   if (access (SERVER, F_OK) == 0)
     unlink (SERVER);
 
@@ -715,45 +439,34 @@ int main (int argc, char *argv[])
       buf[i++] = 0;
       globalLimits[op] = atoi (buf + j);
     }
-  fprintf (stderr, "[%ld] loaded config\n", (long) getpid ());
-
+  fprintf (stderr, "[%ld] loaded config. Config is: \n\n```\n", (long) getpid ());
   // print the limits we loaded to the screen (just more debug info)
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; j++)
     fprintf (stderr, "globalLimits[%d] = %d\n", j, globalLimits[j]);
+  fprintf (stderr, "```\n\n");
   TRANSFORMATIONS_FOLDER = argv[2];
   fprintf (stderr, "[%ld] TRANSFORMATIONS_FOLDER = %s\n", (long) getpid (), TRANSFORMATIONS_FOLDER);
 
   // starts actually being a server
   // register action as callback in listenAs
 
-  mkfifo (SERVER, S_IRWXU);
+  mmkfifo (SERVER, S_IRWXU);
   fprintf (stderr, "[%ld] Created fifo\n", (long) getpid ());
 
   strcpy (FIFO, SERVER);
   signal (SIGINT, sig_handler);
-  //g.serverFifo = open (SERVER, O_RDONLY);
+  signal (SIGTERM, sig_handler);
 
+  g.serverFifo = oopen (SERVER, O_RDONLY);
+  // opening for write only happens after first client writes to pipe
+  // since the command above blocks until someone opens pipe for writing
+  fd = oopen (SERVER, O_WRONLY);
   listening_loop ();
+  cclose (g.serverFifo);
+  cclose (fd);
 
-  //close (g.serverFifo);
   fprintf (stderr, "[%ld] Closed server fifo\n", (long) getpid ());
   unlink (SERVER);
   return 0;
 }
 
-/*
-S ≡ size
-
-char** tasks = malloc(N);
-e ∈ tasks
-e → S ⟨client_pid⟩ ⟨proc-file⟩ ⟨priority⟩ S ⟨src⟩ S ⟨dst⟩ S ⟨ops⟩⁺ ⟨EOO⟩
-
-priority,arrival_time ← {t ∣ t.priority     = max(priorities(tasks))
-                           ∧ t.arrival_date = min({q ∈ tasks ∣ q.priority = t.priority}) }
-
-
-other message for other parts of program:
-S ⟨client_pid⟩ ⟨status⟩ ⟨EOO⟩
-
-⟨finished_task⟩ S ⟨ops⟩⁺
-*/
