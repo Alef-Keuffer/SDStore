@@ -318,7 +318,7 @@ int next_pos (const int maxTasks, task_t *pid[maxTasks])
   return i;
 }
 
-inline int queue_is_empty ()
+static inline int queue_is_empty ()
 {
   return pqueue_size(globalQueue) == 0;
 }
@@ -359,9 +359,11 @@ void listening_loop ()
         {
           // {runningLimit}
           int monitor_pid = wait (NULL);
-          fprintf (stderr, "[%ld] listening_loop: monitor_pid = %d\n", (long) getpid (), monitor_pid);
+          fprintf (stderr, "[%ld] listening_loop: monitor %d is finished\n", (long) getpid (), monitor_pid);
           int j = 0;
-          for (; j < maxTasks && pid[j]->monitor != monitor_pid; j++);
+          for (; j < maxTasks; ++j)
+            if (pid[j] != NULL && pid[j]->monitor == monitor_pid)
+              break;
           decrement_running_count (pid[j]);
           const char *client = pid[j]->client_pid_str;
 
