@@ -340,9 +340,9 @@ void listening_loop ()
       if (g.hasBeenInterrupted && queue_is_empty () && num_running_tasks == 0)
         break;
 
-      for (task_t *task = pqueue_peek (globalQueue); globalQueue->size != 0; task = pqueue_peek (globalQueue))
+      for (task_t *task = pqueue_peek (globalQueue); task != NULL; task = pqueue_peek (globalQueue))
         {
-          if (task != NULL && is_task_possible (task))
+          if (is_task_possible (task))
             {
               int i = next_pos (maxTasks, pid);
               task_t *run_task = pqueue_pop (globalQueue);
