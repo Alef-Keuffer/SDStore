@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <assert.h>
 #include "util.h"
 
 int fifo_create_or_open (const char *path, mode_t permissions, int oflag)
@@ -133,7 +134,7 @@ int ppipe (int *pipedes)
   return fd;
 }
 
-ssize_t rread (int fd, void *buf, size_t nbytes)
+size_t rread (int fd, void *buf, size_t nbytes)
 {
   const ssize_t r = read (fd, buf, nbytes);
   if (r < 0)
@@ -141,6 +142,18 @@ ssize_t rread (int fd, void *buf, size_t nbytes)
       perror ("rread");
       _exit (EXIT_FAILURE);
     }
+  return r;
+}
+
+size_t rread_less_than (int fd, void *buf, size_t nbytes)
+{
+  const ssize_t r = read (fd, buf, nbytes);
+  if (r < 0)
+    {
+      perror ("rread");
+      _exit (EXIT_FAILURE);
+    }
+  assert(r < nbytes);
   return r;
 }
 
