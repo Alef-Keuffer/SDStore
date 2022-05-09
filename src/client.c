@@ -84,6 +84,7 @@ int main (int argc, char *argv[])
 
   strcpy (FIFO, CLIENT);
   signal (SIGINT, sig_handler);
+  signal (SIGTERM, sig_handler);
 
   char c;
 
