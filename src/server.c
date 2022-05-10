@@ -181,32 +181,24 @@ task_t *monitor_run_task (task_t *task)
       return task;
     }
 
-  int fd = oopen (task->client_pid_str, O_WRONLY);
-  wwrite (fd, "processing\n", 11);
-  cclose (fd);
+  int client_fd = oopen (task->client_pid_str, O_WRONLY);
+  wwrite (client_fd, "processing\n", 11);
 
   pipe_progs (task);
 
-  fd = oopen (task->src, O_RDONLY);
-  const off_t bytes_input = lseek (fd, 0, SEEK_END);
-  cclose (fd);
+  struct stat st;
 
-  fd = oopen (task->dst, O_RDONLY);
-  const off_t bytes_output = lseek (fd, 0, SEEK_END);
-  cclose (fd);
+  stat(task->src,&st);
+  const off_t bytes_input = st.st_size;
+
+  stat(task->dst,&st);
+  const off_t bytes_output = st.st_size;
 
   char completed_message[200];
-  int completed_message_length = snprintf (completed_message, 200, "completed (bytes-input: %ld, bytes-output: %ld)\n", bytes_input, bytes_output);
+  int completed_message_length = snprintf (completed_message, 200, "completed (bytes-input: %ld, bytes-output: %ld)\n\x80", bytes_input, bytes_output);
 
-  fd = oopen (task->client_pid_str, O_WRONLY);
-  wwrite (fd, completed_message, completed_message_length);
-  cclose (fd);
-
-  // this is used to indicate to the client that it can close its listening channel
-  const char c = '\x80';
-  fd = oopen (task->client_pid_str, O_WRONLY);
-  wwrite (fd, &c, 1);
-  cclose (fd);
+  wwrite (client_fd, completed_message, completed_message_length);
+  cclose (client_fd);
 
   _exit (EXIT_SUCCESS);
 }

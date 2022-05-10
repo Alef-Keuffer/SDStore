@@ -103,7 +103,7 @@ int main (int argc, char *argv[])
   fprintf (stderr, "[%ld] Created fifo with name: %s\n", (long) getpid (), client_pid_str);
 
   const size_t message_len = strlen (message) + 1;
-  fprintf (stderr, "[%ld] Message (s=%lu) to send is: %s\n\n", (long) getpid (), message_len, message);
+  fprintf (stderr, "[%ld] Message (size=%lu) to send is: %s\n\n", (long) getpid (), message_len, message);
   int fd = oopen (SERVER, O_WRONLY);
   wwrite (fd, message, message_len);
   cclose (fd);
