@@ -16,14 +16,10 @@
 
 /*
 task_message ::= ⟨proc_file⟩ | ⟨status⟩
-  ⟨proc_file⟩ ::= ⟨size⟩ ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
-  ⟨status⟩ ::= ⟨size⟩ ⟨client_pid_str⟩ ⟨STATUS⟩ ⟨EOO⟩
+  ⟨proc_file⟩ ::= ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
+  ⟨status⟩ ::= ⟨client_pid_str⟩ ⟨STATUS⟩
 
-⟨size⟩ ::= ⟨int⟩
-
-maybe unused:
-priority,arrival_time ← {t ∣ t.priority     = max(priorities(tasks))
-                           ∧ t.arrival_date = min({q ∈ tasks ∣ q.priority = t.priority}) }
+⟨num_ops⟩ ::= ⟨int⟩
 */
 
 struct {
