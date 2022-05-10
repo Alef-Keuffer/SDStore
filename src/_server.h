@@ -11,7 +11,6 @@ typedef struct task_t {
     char *dst;
     char *ops;
     int num_ops;
-    char *msg;
     pid_t monitor;
     char ops_totals[NUMBER_OF_TRANSFORMATIONS];
 } task_t;

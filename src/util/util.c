@@ -84,10 +84,10 @@ void cclose (int fd)
 
 int sstrtol (char *str)
 {
-  const int r = (int) strtol (str, NULL, 10);
-  if (r <= 0)
+  const long r = strtol (str, NULL, 10);
+  if (r < 0)
     {
-      perror ("sstrtol failed\n");
+      perror ("sstrtol failed");
       _exit (EXIT_FAILURE);
     }
   return r;

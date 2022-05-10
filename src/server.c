@@ -4,21 +4,20 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <alloca.h>
+
 #include "util/common.h"
 #include "util/pqueue.h"
 #include "_server.h"
 #include "util/taskQueue.h"
 #include "util/util.h"
-#include <assert.h>
-static const int READ_END = 0;
-static const int WRITE_END = 1;
 
 /*
-task_message :: =
-    ⟨size⟩ ⟨client_pid_str⟩ ⟨proc-file⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
-  | ⟨size⟩ ⟨client_pid_str⟩ ⟨status⟩ ⟨EOO⟩
+task_message ::= ⟨proc_file⟩ | ⟨status⟩
+  ⟨proc_file⟩ ::= ⟨size⟩ ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
+  ⟨status⟩ ::= ⟨size⟩ ⟨client_pid_str⟩ ⟨STATUS⟩ ⟨EOO⟩
 
 ⟨size⟩ ::= ⟨int⟩
 
@@ -28,39 +27,35 @@ priority,arrival_time ← {t ∣ t.priority     = max(priorities(tasks))
 */
 
 struct {
-  int hasBeenInterrupted;
-  int isRunning;
-  char *TRANSFORMATIONS_FOLDER;
-  int serverFifo;
+  int has_been_interrupted;
+  int server_is_active;
+  const char *TRANSFORMATIONS_FOLDER;
+  int server_fifo;
+  pqueue_t *queue;
+  int num_active_tasks;
+  int get_transformation_active_limit[NUMBER_OF_TRANSFORMATIONS];
+  int get_transformation_active_count[NUMBER_OF_TRANSFORMATIONS];
 } g = {
-    .hasBeenInterrupted = 0,
-    .isRunning = 0
+    .has_been_interrupted = 0,
+    .server_is_active = 0,
+    .num_active_tasks = 0,
+    .get_transformation_active_count = {0}
 };
 
-int num_running_tasks = 0;
-int globalLimits[NUMBER_OF_TRANSFORMATIONS];
-int globalRunning[NUMBER_OF_TRANSFORMATIONS] = {0};
-pqueue_t *globalQueue;
-char *TRANSFORMATIONS_FOLDER;
-
-void exec (const char op)
+void exec (transformation_t transformation)
 {
-  char command[BUFSIZ - 255];
-  const char *op_name = transformation_get_name (op);
-  strcpy (command, TRANSFORMATIONS_FOLDER);
-  strcat (command, op_name);
-  fprintf (stderr, "[%ld]: execl(%s)\n", (long) getpid (), command);
-  execl (command, op_name, (char *) NULL);
+  char command[BUFSIZ - sizeof (transformation_t)];
+  const char *transformation_str = transformation_enum_to_str (transformation);
+  strcpy (command, g.TRANSFORMATIONS_FOLDER);
+  strcat (command, transformation_str);
+  fprintf (stderr, "[%ld] execl(%s)\n", (long) getpid (), command);
+  execl (command, transformation_str, (char *) NULL);
   perror ("execl");
   _exit (EXIT_FAILURE);
 }
 
-pid_t pipe_progs (const task_t *task)
+void pipe_progs (const task_t *task)
 {
-  fprintf (stderr, "[%ld] pipe_progs\n", (long) getpid ());
-  int monitor_pid;
-  if ((monitor_pid = fork ()) != 0)
-    return monitor_pid;
 
   const char *src = task->src;
   const char *dst = task->dst;
@@ -81,7 +76,7 @@ pid_t pipe_progs (const task_t *task)
           _exit (EXIT_SUCCESS);
         }
 
-      fprintf (stderr, "[%ld]: %s → p_0 → %s\n", (long) getpid (), src, dst);
+      fprintf (stderr, "[%ld] %s → p_0 → %s\n", (long) getpid (), src, dst);
 
       fd = oopen (src, O_RDONLY);
       ddup2 (fd, STDIN_FILENO);
@@ -93,10 +88,14 @@ pid_t pipe_progs (const task_t *task)
       exec (ops[0]);
     }
 
+  static const char READ_END = 0;
+  static const char WRITE_END = 1;
+
   for (int cs = 0; cs < program_num; cs++)
     {
       if (cs != last)
         ppipe (pips[cs]);
+
       if (ffork ())
         if (cs == 0)
           cclose (pips[cs][WRITE_END]);
@@ -107,6 +106,7 @@ pid_t pipe_progs (const task_t *task)
             cclose (pips[cs][WRITE_END]);
             cclose (pips[cs - 1][READ_END]);
           }
+
       else
         {
           if (cs == 0)
@@ -119,7 +119,6 @@ pid_t pipe_progs (const task_t *task)
 
               ddup2 (pips[cs][WRITE_END], STDOUT_FILENO);
               cclose (pips[cs][WRITE_END]);
-              exec (ops[cs]);
             }
           else if (cs == last)
             {
@@ -129,7 +128,6 @@ pid_t pipe_progs (const task_t *task)
 
               ddup2 (pips[cs - 1][READ_END], STDIN_FILENO);
               cclose (pips[cs - 1][READ_END]);
-              exec (ops[cs]);
             }
           else
             {
@@ -138,175 +136,201 @@ pid_t pipe_progs (const task_t *task)
               cclose (pips[cs][WRITE_END]);
               ddup2 (pips[cs - 1][READ_END], STDIN_FILENO);
               cclose (pips[cs - 1][READ_END]);
-              exec (ops[cs]);
             }
+          exec (ops[cs]);
         }
     }
 
   while (waitpid (-1, NULL, 0) > 0)
-    {
-      fprintf (stderr, "[%ld] pipe_progs: waited\n", (long) getpid ());
-    }
+    fprintf (stderr, "[%ld] pipe_progs: waited\n", (long) getpid ());
   fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
-  _exit (EXIT_SUCCESS);
 }
 
-int is_task_possible (const task_t *task)
+int task_is_possible (const task_t *task)
 {
   char opsTotal[NUMBER_OF_TRANSFORMATIONS] = {0};
 
   for (int j = 0; j < task->num_ops; j++)
     ++opsTotal[task->ops[j]];
 
-  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; j++)
+  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
     {
-      if (globalRunning[j] + opsTotal[j] > globalLimits[j])
+      if (g.get_transformation_active_count[j] + opsTotal[j] > g.get_transformation_active_limit[j])
         return 0;
     }
   return 1;
 }
 
-void increment_running_count (const task_t *task)
+void increment_active_transformations_count (const task_t *task)
 {
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-    globalRunning[j] += task->ops_totals[j];
+    g.get_transformation_active_count[j] += task->ops_totals[j];
 }
 
-pid_t dispatchTask (task_t *task)
+/*!
+ *
+ * @param task  an innactive task
+ * @return an active task (a monitor is executing it)
+ */
+task_t *monitor_run_task (task_t *task)
 {
-  const char *CLIENT = task->client_pid_str;
-  int fd = oopen (CLIENT, O_WRONLY);
+  fprintf (stderr, "[%ld] dispatching task for %s\n", (long) getpid (), task->client_pid_str);
+
+  increment_active_transformations_count (task);
+
+  int monitor_pid;
+  if ((monitor_pid = ffork ()) != 0)
+    {
+      task->monitor = monitor_pid;
+      return task;
+    }
+
+  int fd = oopen (task->client_pid_str, O_WRONLY);
   wwrite (fd, "processing\n", 11);
   cclose (fd);
 
-  // update running
-  increment_running_count (task);
+  pipe_progs (task);
 
-  task->monitor = pipe_progs (task);
+  fd = oopen (task->src, O_RDONLY);
+  const off_t bytes_input = lseek (fd, 0, SEEK_END);
+  cclose (fd);
+
+  fd = oopen (task->dst, O_RDONLY);
+  const off_t bytes_output = lseek (fd, 0, SEEK_END);
+  cclose (fd);
+
+  char completed_message[200];
+  int completed_message_length = snprintf (completed_message, 200, "completed (bytes-input: %ld, bytes-output: %ld)\n", bytes_input, bytes_output);
+
+  fd = oopen (task->client_pid_str, O_WRONLY);
+  wwrite (fd, completed_message, completed_message_length);
+  cclose (fd);
+
+  // this is used to indicate to the client that it can close its listening channel
+  const char c = '\x80';
+  fd = oopen (task->client_pid_str, O_WRONLY);
+  wwrite (fd, &c, 1);
+  cclose (fd);
+
+  _exit (EXIT_SUCCESS);
 }
 
 void free_task (task_t *task)
 {
   free (task->client_pid_str);
   free (task->ops);
-  free (task->msg);
   free (task->src);
   free (task->dst);
   free (task);
-}
-
-task_t *get_task (const char *m)
-{
-  // m ≡ ⟨size⟩ ⟨client_pid_str⟩ ⟨proc-file⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
-  task_t *task = malloc (sizeof (task_t));
-
-  const char *pid_str = m + 1;
-  fprintf (stderr, "[%ld] get_task: pid_str is %s\n", (long) getpid (), pid_str);
-  const unsigned char pid_str_size = pid_str[-1];
-  fprintf (stderr, "[%ld] get_task: pid_str_size is %d\n", (long) getpid (), pid_str_size);
-  const unsigned char priority = m[pid_str_size + 2];
-  fprintf (stderr, "[%ld] get_task: priority is %d\n", (long) getpid (), priority);
-  const char *src = m + pid_str_size + 4;
-  fprintf (stderr, "[%ld] get_task: src is %s\n", (long) getpid (), src);
-  const unsigned char s_src = src[-1];
-  fprintf (stderr, "[%ld] get_task: s_src is %d\n", (long) getpid (), s_src);
-  const char *dst = src + s_src + 1;
-  fprintf (stderr, "[%ld] get_task: dst is %s\n", (long) getpid (), dst);
-  const unsigned char s_dst = dst[-1];
-  fprintf (stderr, "[%ld] get_task: s_dst is %d\n", (long) getpid (), s_dst);
-  const char *ops = dst + s_dst + 1;
-  const int num_ops = (unsigned char) ops[-1];
-  fprintf (stderr, "[%ld] get_task: number of ops is %d\n", (long) getpid (), num_ops);
-
-  task->client_pid_str = malloc (pid_str_size);
-  memcpy (task->client_pid_str, pid_str, pid_str_size);
-  task->src = malloc (s_src);
-  memcpy (task->src, src, s_src);
-  task->dst = malloc (s_dst);
-  memcpy (task->dst, dst, s_dst);
-  task->ops = malloc (num_ops);
-  memcpy (task->ops, ops, num_ops);
-  task->num_ops = num_ops;
-  task->pri = priority;
-  // ⟨size⟩ ⟨client_pid_str⟩ ⟨proc-file⟩ ⟨priority⟩ ⟨size⟩ ⟨src⟩ ⟨size⟩ ⟨dst⟩ ⟨size⟩ ⟨ops⟩⁺ ⟨EOO⟩
-  const int msg_size =
-      1 // ⟨size⟩
-      + pid_str_size // ⟨client_pid_str⟩
-      + 1 // ⟨proc-file⟩
-      + 1 // ⟨priority⟩
-      + 1 // ⟨size⟩
-      + s_src // ⟨src⟩
-      + 1 // ⟨size⟩
-      + s_dst // ⟨dst⟩
-      + 1 // ⟨size⟩
-      + num_ops // ⟨ops⟩⁺
-      + 1; // ⟨EOO⟩
-  task->msg = malloc (msg_size);
-  memcpy (task->msg, m, msg_size);
-
-  for (int j = 0; j < task->num_ops; j++)
-    task->ops_totals[j] = 0;
-
-  for (int j = 0; j < task->num_ops; j++)
-    ++task->ops_totals[task->ops[j]];
-
-  return task;
 }
 
 size_t get_status_str (char stats[BUFSIZ])
 {
   stats[0] = 0;
   char buf[BUFSIZ];
-  snprintf (buf, BUFSIZ, "Number of running tasks: %d\n", num_running_tasks);
+  snprintf (buf, BUFSIZ, "Number of active tasks: %d\n", g.num_active_tasks);
   strcat (stats, buf);
-  for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
+  for (transformation_t i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
     {
-      snprintf (buf, BUFSIZ, "%s : %d\n", transformation_get_name (i), globalRunning[i]);
+      snprintf (buf, BUFSIZ, "%s : %d\n", transformation_enum_to_str (i), g.get_transformation_active_count[i]);
       strcat (stats, buf);
     }
   strcat (stats, "\x80");
   return strlen (stats);
 }
 
-void deal_with_message (char *m)
+void process_message (char *m)
 {
-  char *client = m + 1;
-  if (m[m[0] + 1] == STATUS)
+  fprintf (stderr, "[%ld] process_message: %s\n", (long) getpid (), m);
+
+  const char del[2] = "\31";
+  char *tok;
+
+  tok = strtok (m, del);
+  const char *client_pid_str = tok;
+  fprintf (stderr, "[%ld] client_pid_str = %s\n", (long) getpid (), client_pid_str);
+
+  tok = strtok (NULL, del);
+  const char *command = tok;
+  fprintf (stderr, "[%ld] command = %s\n", (long) getpid (), command);
+
+  if (transformation_str_to_enum (command) == STATUS)
     {
       char status[BUFSIZ];
       const size_t n = get_status_str (status);
-      const int fd = oopen (client, O_WRONLY);
+      const int fd = oopen (client_pid_str, O_WRONLY);
       wwrite (fd, status, n);
       cclose (fd);
-      fprintf (stderr, "[%ld] status: for client %s\n", (long) getpid (), client);
+      fprintf (stderr, "[%ld] status: for client %s\n", (long) getpid (), client_pid_str);
+      return;
     }
-  else
+
+  task_t *task = malloc (sizeof (task_t));
+
+  task->client_pid_str = malloc (strlen (client_pid_str) + 1);
+  strcpy (task->client_pid_str, client_pid_str);
+  fprintf (stderr, "[%ld] task->client_pid_str = %s\n", (long) getpid (), task->client_pid_str);
+
+  tok = strtok (NULL, del);
+  task->pri = sstrtol (tok);
+  fprintf (stderr, "[%ld] task->pri = %llu\n", (long) getpid (), task->pri);
+
+  tok = strtok (NULL, del);
+  task->src = malloc (strlen (tok) + 1);
+  strcpy (task->src, tok);
+  fprintf (stderr, "[%ld] task->src = %s\n", (long) getpid (), task->src);
+
+  tok = strtok (NULL, del);
+  task->dst = malloc (strlen (tok) + 1);
+  strcpy (task->dst, tok);
+  fprintf (stderr, "[%ld] task->dst = %s\n", (long) getpid (), task->dst);
+
+  tok = strtok (NULL, del);
+  task->num_ops = sstrtol (tok);
+  task->ops = malloc (task->num_ops);
+  fprintf (stderr, "[%ld] task->num_ops = %d\n", (long) getpid (), task->num_ops);
+
+  memset (task->ops_totals, 0, NUMBER_OF_TRANSFORMATIONS);
+  tok = strtok (NULL, del);
+  for (int i = 0; tok != NULL; ++i, tok = strtok (NULL, del))
     {
-      task_t *task = get_task (m);
-      pqueue_insert (globalQueue, task);
-      int fd = oopen (task->client_pid_str, O_WRONLY);
-      wwrite (fd, "pending\n", 8);
-      cclose (fd);
+      transformation_t transformation = transformation_str_to_enum (tok);
+      task->ops[i] = transformation;
+      ++task->ops_totals[transformation];
     }
+
+  fprintf (stderr, "[%ld] task->ops =", (long) getpid ());
+  for (int i = 0; i < task->num_ops; ++i)
+    fprintf (stderr, " %s", transformation_enum_to_str (task->ops[i]));
+  fprintf (stderr, "\n");
+
+  pqueue_insert (g.queue, task);
+  int fd = oopen (task->client_pid_str, O_WRONLY);
+  wwrite (fd, "pending\n", 8);
+  cclose (fd);
 }
 
-void blockRead ()
+void block_read ()
 {
-  char m[BUFSIZ];
+  char buf[BUFSIZ];
   fprintf (stderr, "[%ld] blockRead\n", (long) getpid ());
   size_t nbytes;
 
   // assume client requests will not fill pipe buffer
-  nbytes = rread (g.serverFifo, m, BUFSIZ);
+  nbytes = rread (g.server_fifo, buf, BUFSIZ);
   assert(nbytes < BUFSIZ);
-  for (size_t i = 0; i < nbytes; ++i)
-    if (i == 0 || m[i - 1] == EOO)
-      deal_with_message (m + i);
+  fprintf (stderr, "[%ld] blockRead: read %s\n", (long) getpid (), buf);
+  for (size_t i = 0; i < nbytes;)
+    {
+      size_t j = strlen(buf+i) + 1;
+      process_message (buf + i);
+      i += j;
+    }
 }
-void decrement_running_count (const task_t *task)
+void decrement_active_transformations_count (const task_t *task)
 {
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-    globalRunning[j] -= task->ops_totals[j];
+    g.get_transformation_active_count[j] -= task->ops_totals[j];
 }
 
 int next_pos (const int maxTasks, task_t *pid[maxTasks])
@@ -320,88 +344,66 @@ int next_pos (const int maxTasks, task_t *pid[maxTasks])
 
 static inline int queue_is_empty ()
 {
-  return pqueue_size(globalQueue) == 0;
+  return pqueue_size (g.queue) == 0;
 }
 
 void listening_loop ()
 {
   fprintf (stderr, "[%ld] listening_loop\n", (long) getpid ());
 
-  const int maxTasks = 100; //node -> {data = {pid_executioner,t0,t1,t2,t3,t4,t5,t6,pid_client}, node_t* next}
-  task_t *pid[maxTasks]; //{pid,t0,t1,t2,t3,t4,t5,t6,pid_client}
-  for (int i = 0; i < maxTasks; ++i)
-    pid[i] = NULL;
+  const int max_parallel_tasks = 100; //node -> {data = {pid_executioner,t0,t1,t2,t3,t4,t5,t6,pid_client}, node_t* next}
+  task_t *active_tasks[max_parallel_tasks]; //{pid,t0,t1,t2,t3,t4,t5,t6,pid_client}
+  for (int i = 0; i < max_parallel_tasks; ++i)
+    active_tasks[i] = NULL;
 
   while (1)
     {
-      while (!g.hasBeenInterrupted && queue_is_empty () && num_running_tasks == 0)
-        blockRead ();
+      while (!g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
+        block_read ();
 
-      if (g.hasBeenInterrupted && queue_is_empty () && num_running_tasks == 0)
+      if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
 
-      for (task_t *task = pqueue_peek (globalQueue); task != NULL; task = pqueue_peek (globalQueue))
+      for (task_t *task = pqueue_peek (g.queue); task != NULL; task = pqueue_peek (g.queue))
         {
-          if (is_task_possible (task))
+          if (task_is_possible (task))
             {
-              int i = next_pos (maxTasks, pid);
-              task_t *run_task = pqueue_pop (globalQueue);
-              dispatchTask (run_task);
-              pid[i] = run_task;
-              ++num_running_tasks;
+              const int i = next_pos (max_parallel_tasks, active_tasks);
+              task_t *active_task = monitor_run_task (pqueue_pop (g.queue));
+              active_tasks[i] = active_task;
+              ++g.num_active_tasks;
             }
           else
             break;
         }
 
       // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
-      if (num_running_tasks > 0)
+      if (g.num_active_tasks > 0)
         {
           // {runningLimit}
-          int monitor_pid = wait (NULL);
+          const int monitor_pid = wait (NULL);
           fprintf (stderr, "[%ld] listening_loop: monitor %d is finished\n", (long) getpid (), monitor_pid);
-          int j = 0;
-          for (; j < maxTasks; ++j)
-            if (pid[j] != NULL && pid[j]->monitor == monitor_pid)
+
+          // search for task that was being executed by the monitor that just finished
+          int finished_task_index = 0;
+          for (; finished_task_index < max_parallel_tasks; ++finished_task_index)
+            if (active_tasks[finished_task_index] != NULL && active_tasks[finished_task_index]->monitor == monitor_pid)
               break;
-          decrement_running_count (pid[j]);
-          const char *client = pid[j]->client_pid_str;
+          decrement_active_transformations_count (active_tasks[finished_task_index]);
 
-          int fd = oopen (pid[j]->src, O_RDONLY);
-          const off_t bytes_input = lseek (fd, 0, SEEK_END);
-          cclose (fd);
-
-          fd = oopen (pid[j]->dst, O_RDONLY);
-          const off_t bytes_output = lseek (fd, 0, SEEK_END);
-          cclose (fd);
-
-          char completed_message[200];
-          int completed_message_length = snprintf (completed_message, 200, "completed (bytes-input: %ld, bytes-output: %ld)\n", bytes_input, bytes_output);
-
-          fd = oopen (client, O_WRONLY);
-          wwrite (fd, completed_message, completed_message_length);
-          cclose (fd);
-
-          // this is used to indicate to the client that it can close its listening channel
-          const char c = '\x80';
-          fd = oopen (client, O_WRONLY);
-          wwrite (fd, &c, 1);
-          cclose (fd);
-
-          free_task (pid[j]);
-          pid[j] = NULL;
-          --num_running_tasks;
+          free_task (active_tasks[finished_task_index]);
+          active_tasks[finished_task_index] = NULL;
+          --g.num_active_tasks;
         }
     }
 }
 
 static char FIFO[32];
-static void sig_handler (int signum)
+static void sig_handler ()
 {
-  signum++; // just for no error about unused variable
-  g.hasBeenInterrupted = 1;
+  g.has_been_interrupted = 1;
   unlink (FIFO);
-  _exit (0);
+  _exit (EXIT_SUCCESS); //needs to be removed for gracious exit
 }
 
 int main (int argc, char *argv[])
@@ -409,8 +411,8 @@ int main (int argc, char *argv[])
   (void) argc; /* unused parameter */
   fprintf (stderr, "[%ld] loading config...\n\n", (long) getpid ());
   char buf[BUFSIZ];
-  const char *configFilename = argv[1];
-  int fd = oopen (configFilename, O_RDONLY);
+  const char *config_file = argv[1];
+  int fd = oopen (config_file, O_RDONLY);
   rread (fd, buf, BUFSIZ);
   cclose (fd);
   fprintf (stderr, "[%ld] config payload:\n\n```\n%s\n```\n\n", (long) getpid (), buf);
@@ -419,7 +421,7 @@ int main (int argc, char *argv[])
   if (access (SERVER, F_OK) == 0)
     unlink (SERVER);
 
-  globalQueue = task_queue_init ();
+  g.queue = task_queue_init ();
 
   /* loading config: parses and loads the configuration file.
    * notices that we assume a very specific format,
@@ -434,20 +436,20 @@ int main (int argc, char *argv[])
       while (buf[i] != ' ') // !isspace()
         i++;
       buf[i++] = 0;
-      int op = parseOp (buf + j);
+      transformation_t transformation = transformation_str_to_enum (buf + j);
       j = i;
       while (buf[i] != 0 && buf[i] != '\n')
         i++;
       buf[i++] = 0;
-      globalLimits[op] = atoi (buf + j);
+      g.get_transformation_active_limit[transformation] = sstrtol (buf + j);
     }
   fprintf (stderr, "[%ld] loaded config. Config is: \n\n```\n", (long) getpid ());
   // print the limits we loaded to the screen (just more debug info)
-  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; j++)
-    fprintf (stderr, "globalLimits[%d] = %d\n", j, globalLimits[j]);
+  for (transformation_t j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
+    fprintf (stderr, "limits[%s] = %d\n", transformation_enum_to_str (j), g.get_transformation_active_limit[j]);
   fprintf (stderr, "```\n\n");
-  TRANSFORMATIONS_FOLDER = argv[2];
-  fprintf (stderr, "[%ld] TRANSFORMATIONS_FOLDER = %s\n", (long) getpid (), TRANSFORMATIONS_FOLDER);
+  g.TRANSFORMATIONS_FOLDER = argv[2];
+  fprintf (stderr, "[%ld] g.TRANSFORMATIONS_FOLDER = %s\n\n", (long) getpid (), g.TRANSFORMATIONS_FOLDER);
 
   // starts actually being a server
   // register action as callback in listenAs
@@ -459,12 +461,12 @@ int main (int argc, char *argv[])
   signal (SIGINT, sig_handler);
   signal (SIGTERM, sig_handler);
 
-  g.serverFifo = oopen (SERVER, O_RDONLY);
+  g.server_fifo = oopen (SERVER, O_RDONLY);
   // opening for write only happens after first client writes to pipe
   // since the command above blocks until someone opens pipe for writing
   fd = oopen (SERVER, O_WRONLY);
   listening_loop ();
-  cclose (g.serverFifo);
+  cclose (g.server_fifo);
   cclose (fd);
 
   fprintf (stderr, "[%ld] Closed server fifo\n", (long) getpid ());

@@ -14,4 +14,5 @@ int ddup2(int fildes, int fildes2);
 pid_t ffork();
 void eexecl(const char* path, const char *arg,...);
 int ppipe(int *pipedes);
+int sstrtol (char *str);
 #endif //SDSTORE_UTIL_H

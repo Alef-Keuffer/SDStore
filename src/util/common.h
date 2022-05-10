@@ -2,6 +2,9 @@
 #define COMMON_H
 
 extern const char* const SERVER;
+
+typedef char transformation_t;
+
 enum {
     EOO = -128, /*END OF (operations)COMMUNICATION*/
     PROC_FILE,
@@ -17,10 +20,9 @@ enum {
     NUMBER_OF_TRANSFORMATIONS
 };
 
-char parseOp (const char* transformation_string);
+transformation_t transformation_str_to_enum (const char* transformation_string);
+const char *transformation_enum_to_str (transformation_t t);
+
 void speakTo(const char* outFilename, char *ops);
-void listenAs(const char* inFilename, void (*action) (char *), int isPassive);
-const char *transformation_get_name (unsigned char t);
-char* toMessage(char *string);
 
 #endif //COMMON_H
