@@ -99,11 +99,18 @@ int main (int argc, char *argv[])
         delimcat (message, argv[j]);
     }
 
-  mkfifo (client_pid_str, S_IRWXU);
+  mmkfifo (client_pid_str, S_IRWXU);
   fprintf (stderr, "[%ld] Created fifo with name: %s\n", (long) getpid (), client_pid_str);
 
   const size_t message_len = strlen (message) + 1;
   fprintf (stderr, "[%ld] Message (size=%lu) to send is: %s\n\n", (long) getpid (), message_len, message);
+
+  if ((access (SERVER, F_OK) != 0))
+    {
+      fprintf (stderr, "Could not find server fifo, try again later\n");
+      _exit (EXIT_SUCCESS);
+    }
+
   int fd = oopen (SERVER, O_WRONLY);
   wwrite (fd, message, message_len);
   cclose (fd);
