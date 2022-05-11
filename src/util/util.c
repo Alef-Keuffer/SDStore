@@ -50,7 +50,7 @@ ssize_t readln (int fd, char buf[], ssize_t maxLength)
 {
   char c;
   ssize_t ret = 0;
-  for (unsigned int i = 0; i < maxLength && my_read(fd, &c, 1) && c != '\n'; i++)
+  for (unsigned int i = 0; i < maxLength && my_read (fd, &c, 1) && c != '\n'; i++)
     {
       buf[i] = c;
       ret++;
@@ -61,7 +61,7 @@ ssize_t readln (int fd, char buf[], ssize_t maxLength)
 int oopen (const char *file, int oflag)
 {
   const int fd = open (file, oflag);
-  if (fd == -1)
+  if (fd == -1 && errno !=  EINTR)
     {
       fprintf (stderr, "[%ld] ", (long) getpid ());
       perror ("oopen");
@@ -134,13 +134,17 @@ int ppipe (int *pipedes)
   return fd;
 }
 
+/*!
+ * Does NOT exit on EINTR
+ */
 size_t rread (int fd, void *buf, size_t nbytes)
 {
   const ssize_t r = read (fd, buf, nbytes);
   if (r < 0)
     {
       perror ("rread");
-      _exit (EXIT_FAILURE);
+      if (errno != EINTR)
+        _exit (EXIT_FAILURE);
     }
   return r;
 }
@@ -157,7 +161,7 @@ size_t rread_less_than (int fd, void *buf, size_t nbytes)
   return r;
 }
 
-ssize_t wwrite(int fd, const void *buf, size_t nbytes)
+ssize_t wwrite (int fd, const void *buf, size_t nbytes)
 {
   const ssize_t r = write (fd, buf, nbytes);
   if (r < 0)
@@ -168,19 +172,23 @@ ssize_t wwrite(int fd, const void *buf, size_t nbytes)
   return r;
 }
 
-void *mmalloc(size_t size) {
-  void *r = malloc(size);
-  if (r == NULL && size != 0) {
-    perror("mmalloc");
-    _exit (EXIT_FAILURE);
-  }
+void *mmalloc (size_t size)
+{
+  void *r = malloc (size);
+  if (r == NULL && size != 0)
+    {
+      perror ("mmalloc");
+      _exit (EXIT_FAILURE);
+    }
   return r;
 }
 
-void mmkfifo(const char *path, mode_t mode) {
-  int r = mkfifo(path,mode);
-  if (r) {
-    perror ("mmkfifo");
-    _exit(EXIT_FAILURE);
-  }
+void mmkfifo (const char *path, mode_t mode)
+{
+  int r = mkfifo (path, mode);
+  if (r)
+    {
+      perror ("mmkfifo");
+      _exit (EXIT_FAILURE);
+    }
 }
