@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <alloca.h>
-
 #include "util/common.h"
 #include "util/pqueue.h"
 #include "_server.h"
@@ -23,17 +22,18 @@ task_message ::= ⟨proc_file⟩ | ⟨status⟩
 */
 
 struct {
-  int has_been_interrupted;
+  volatile sig_atomic_t has_been_interrupted;
   int server_is_active;
   const char *TRANSFORMATIONS_FOLDER;
-  int server_fifo;
+  int server_fifo_rd;
+  int server_fifo_wr;
   pqueue_t *queue;
   int num_active_tasks;
   int get_transformation_active_limit[NUMBER_OF_TRANSFORMATIONS];
   int get_transformation_active_count[NUMBER_OF_TRANSFORMATIONS];
 } g = {
     .has_been_interrupted = 0,
-    .server_is_active = 0,
+    .server_is_active = 1,
     .num_active_tasks = 0,
     .get_transformation_active_count = {0}
 };
@@ -137,8 +137,10 @@ void pipe_progs (const task_t *task)
         }
     }
 
-  while (waitpid (-1, NULL, 0) > 0)
-    fprintf (stderr, "[%ld] pipe_progs: waited\n", (long) getpid ());
+  pid_t pid;
+  int status;
+  while ((pid = waitpid (-1, &status, 0)) > 0)
+      fprintf (stderr, "[%ld] pipe_progs: %ld has finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), (long) pid, WIFEXITED(status), WEXITSTATUS(status));
   fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
 }
 
@@ -175,11 +177,17 @@ task_t *monitor_run_task (task_t *task)
   increment_active_transformations_count (task);
 
   int monitor_pid;
-  if ((monitor_pid = ffork ()) != 0)
+  if ((monitor_pid = ffork ()))
     {
       task->monitor = monitor_pid;
       return task;
     }
+
+  /* Without these ignore when, for example, ctrl-c is pressed in terminal
+   * all child exec processes are terminated.
+   */
+  signal (SIGINT, SIG_IGN);
+  signal (SIGTERM, SIG_IGN);
 
   int client_fd = oopen (task->client_pid_str, O_WRONLY);
   wwrite (client_fd, "processing\n", 11);
@@ -188,10 +196,10 @@ task_t *monitor_run_task (task_t *task)
 
   struct stat st;
 
-  stat(task->src,&st);
+  stat (task->src, &st);
   const off_t bytes_input = st.st_size;
 
-  stat(task->dst,&st);
+  stat (task->dst, &st);
   const off_t bytes_output = st.st_size;
 
   char completed_message[200];
@@ -298,19 +306,24 @@ void process_message (char *m)
   cclose (fd);
 }
 
+void sig_handler ()
+{ g.has_been_interrupted = 1; }
+
 void block_read ()
 {
+  fprintf (stderr, "[%ld] entering block_read\n", (long) getpid ());
   char buf[BUFSIZ];
-  fprintf (stderr, "[%ld] blockRead\n", (long) getpid ());
   size_t nbytes;
 
   // assume client requests will not fill pipe buffer
-  nbytes = rread (g.server_fifo, buf, BUFSIZ);
+  nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
+  if (g.has_been_interrupted)
+    return;
   assert(nbytes < BUFSIZ);
-  fprintf (stderr, "[%ld] blockRead: read %s\n", (long) getpid (), buf);
+  fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
   for (size_t i = 0; i < nbytes;)
     {
-      size_t j = strlen(buf+i) + 1;
+      size_t j = strlen (buf + i) + 1;
       process_message (buf + i);
       i += j;
     }
@@ -337,10 +350,10 @@ static inline int queue_is_empty ()
 
 void listening_loop ()
 {
-  fprintf (stderr, "[%ld] listening_loop\n", (long) getpid ());
+  fprintf (stderr, "[%ld] entered listening_loop\n", (long) getpid ());
 
-  const int max_parallel_tasks = 100; //node -> {data = {pid_executioner,t0,t1,t2,t3,t4,t5,t6,pid_client}, node_t* next}
-  task_t *active_tasks[max_parallel_tasks]; //{pid,t0,t1,t2,t3,t4,t5,t6,pid_client}
+  const int max_parallel_tasks = 100;
+  task_t *active_tasks[max_parallel_tasks];
   for (int i = 0; i < max_parallel_tasks; ++i)
     active_tasks[i] = NULL;
 
@@ -369,6 +382,7 @@ void listening_loop ()
       if (g.num_active_tasks > 0)
         {
           // {runningLimit}
+          fprintf (stderr, "[%ld] waiting a monitor\n", (long) getpid ());
           const int monitor_pid = wait (NULL);
           fprintf (stderr, "[%ld] listening_loop: monitor %d is finished\n", (long) getpid (), monitor_pid);
 
@@ -385,17 +399,18 @@ void listening_loop ()
         }
     }
 }
-
 static char FIFO[32];
-static void sig_handler ()
-{
-  g.has_been_interrupted = 1;
-  unlink (FIFO);
-  _exit (EXIT_SUCCESS); //needs to be removed for gracious exit
-}
 
 int main (int argc, char *argv[])
 {
+  struct sigaction sa;
+  sigemptyset (&sa.sa_mask);
+  sa.sa_handler = sig_handler;
+  sa.sa_flags = 0;
+
+  sigaction (SIGINT, &sa, NULL);
+  sigaction (SIGTERM, &sa, NULL);
+
   (void) argc; /* unused parameter */
   fprintf (stderr, "[%ld] loading config...\n\n", (long) getpid ());
   char buf[BUFSIZ];
@@ -404,11 +419,11 @@ int main (int argc, char *argv[])
   rread (fd, buf, BUFSIZ);
   cclose (fd);
   fprintf (stderr, "[%ld] config payload:\n\n```\n%s\n```\n\n", (long) getpid (), buf);
-
   // if a file with the same name as our fifo exists we delete it
+
   if (access (SERVER, F_OK) == 0)
     unlink (SERVER);
-
+  perror ("pipe_progs");
   g.queue = task_queue_init ();
 
   /* loading config: parses and loads the configuration file.
@@ -446,19 +461,17 @@ int main (int argc, char *argv[])
   fprintf (stderr, "[%ld] Created fifo\n", (long) getpid ());
 
   strcpy (FIFO, SERVER);
-  signal (SIGINT, sig_handler);
-  signal (SIGTERM, sig_handler);
-
-  g.server_fifo = oopen (SERVER, O_RDONLY);
+  g.server_fifo_rd = oopen (SERVER, O_RDONLY);
   // opening for write only happens after first client writes to pipe
   // since the command above blocks until someone opens pipe for writing
-  fd = oopen (SERVER, O_WRONLY);
-  listening_loop ();
-  cclose (g.server_fifo);
-  cclose (fd);
+  g.server_fifo_wr = oopen (SERVER, O_WRONLY);
 
-  fprintf (stderr, "[%ld] Closed server fifo\n", (long) getpid ());
+  listening_loop ();
+  cclose (g.server_fifo_rd);
+  cclose (g.server_fifo_wr);
+
   unlink (SERVER);
+  fprintf (stderr, "[%ld] Unlinked server fifo\n", (long) getpid ());
   return 0;
 }
 
