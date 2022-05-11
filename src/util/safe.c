@@ -1,30 +1,12 @@
-#include <unistd.h>
+#include <sys/unistd.h>
+#include <sys/fcntl.h>
 #include <sys/stat.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <assert.h>
-#include "util.h"
+#include <sys/errno.h>
 
-int fifo_create_or_open (const char *path, mode_t permissions, int oflag)
-{
-  if (access (path, F_OK) == -1) /*check if fifo already exists*/
-    {
-      if (mkfifo (path, permissions))
-        {
-          perror ("fifo_create_write: failed at mkfifo");
-          _exit (EXIT_FAILURE);
-        }
-    }
-  int fd = open (path, oflag);
-  if (fd == -1)
-    {
-      perror ("fifo_create_write: failed at opening the fifo");
-      _exit (EXIT_FAILURE);
-    }
-  return fd;
-}
+#include <stdlib.h>
+#include <stdio.h>
+
+#include "safe.h"
 
 ssize_t my_read (int fd, void *buf, size_t nbytes)
 {
@@ -44,18 +26,6 @@ ssize_t my_read (int fd, void *buf, size_t nbytes)
       buf += ret;
     }
   return nread;
-}
-
-ssize_t readln (int fd, char buf[], ssize_t maxLength)
-{
-  char c;
-  ssize_t ret = 0;
-  for (unsigned int i = 0; i < maxLength && my_read (fd, &c, 1) && c != '\n'; i++)
-    {
-      buf[i] = c;
-      ret++;
-    }
-  return ret;
 }
 
 int oopen (const char *file, int oflag)
@@ -128,7 +98,6 @@ int ppipe (int *pipedes)
   if (fd < 0)
     {
       perror ("ppipe");
-
       _exit (EXIT_FAILURE);
     }
   return fd;
@@ -146,18 +115,6 @@ size_t rread (int fd, void *buf, size_t nbytes)
       if (errno != EINTR)
         _exit (EXIT_FAILURE);
     }
-  return r;
-}
-
-size_t rread_less_than (int fd, void *buf, size_t nbytes)
-{
-  const ssize_t r = read (fd, buf, nbytes);
-  if (r < 0)
-    {
-      perror ("rread");
-      _exit (EXIT_FAILURE);
-    }
-  assert(r < nbytes);
   return r;
 }
 

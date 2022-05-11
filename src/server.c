@@ -1,17 +1,18 @@
-#include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include <sys/fcntl.h>
+#include <sys/unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <string.h>
+
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <assert.h>
-#include <alloca.h>
+
 #include "util/common.h"
 #include "util/pqueue.h"
+#include "util/pqueue_task.h"
+#include "util/safe.h"
 #include "_server.h"
-#include "util/taskQueue.h"
-#include "util/util.h"
 
 /*
 task_message ::= ⟨proc_file⟩ | ⟨status⟩
@@ -23,7 +24,6 @@ task_message ::= ⟨proc_file⟩ | ⟨status⟩
 
 struct {
   volatile sig_atomic_t has_been_interrupted;
-  int server_is_active;
   const char *TRANSFORMATIONS_FOLDER;
   int server_fifo_rd;
   int server_fifo_wr;
@@ -33,7 +33,6 @@ struct {
   int get_transformation_active_count[NUMBER_OF_TRANSFORMATIONS];
 } g = {
     .has_been_interrupted = 0,
-    .server_is_active = 1,
     .num_active_tasks = 0,
     .get_transformation_active_count = {0}
 };
@@ -45,14 +44,11 @@ void exec (transformation_t transformation)
   strcpy (command, g.TRANSFORMATIONS_FOLDER);
   strcat (command, transformation_str);
   fprintf (stderr, "[%ld] execl(%s)\n", (long) getpid (), command);
-  execl (command, transformation_str, (char *) NULL);
-  perror ("execl");
-  _exit (EXIT_FAILURE);
+  eexecl (command, transformation_str, (char *) NULL);
 }
 
 void pipe_progs (const task_t *task)
 {
-
   const char *src = task->src;
   const char *dst = task->dst;
   const char *ops = task->ops;
@@ -87,7 +83,7 @@ void pipe_progs (const task_t *task)
   static const char READ_END = 0;
   static const char WRITE_END = 1;
 
-  for (int cs = 0; cs < program_num; cs++)
+  for (int cs = 0; cs < program_num; ++cs)
     {
       if (cs != last)
         ppipe (pips[cs]);
@@ -152,10 +148,9 @@ int task_is_possible (const task_t *task)
     ++opsTotal[task->ops[j]];
 
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-    {
       if (g.get_transformation_active_count[j] + opsTotal[j] > g.get_transformation_active_limit[j])
         return 0;
-    }
+
   return 1;
 }
 
@@ -166,8 +161,7 @@ void increment_active_transformations_count (const task_t *task)
 }
 
 /*!
- *
- * @param task  an innactive task
+ * @param task an innactive task
  * @return an active task (a monitor is executing it)
  */
 task_t *monitor_run_task (task_t *task)
@@ -220,13 +214,17 @@ void free_task (task_t *task)
   free (task);
 }
 
+/*!
+ * @param[out] stats `\x80` terminated string with server status.
+ * @return length of string
+ */
 size_t get_status_str (char stats[BUFSIZ])
 {
   stats[0] = 0;
   char buf[BUFSIZ];
   snprintf (buf, BUFSIZ, "Number of active tasks: %d\n", g.num_active_tasks);
   strcat (stats, buf);
-  for (transformation_t i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
+  for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
     {
       snprintf (buf, BUFSIZ, "%s : %d\n", transformation_enum_to_str (i), g.get_transformation_active_count[i]);
       strcat (stats, buf);
@@ -261,9 +259,9 @@ void process_message (char *m)
       return;
     }
 
-  task_t *task = malloc (sizeof (task_t));
+  task_t *task = mmalloc (sizeof (task_t));
 
-  task->client_pid_str = malloc (strlen (client_pid_str) + 1);
+  task->client_pid_str = mmalloc (strlen (client_pid_str) + 1);
   strcpy (task->client_pid_str, client_pid_str);
   fprintf (stderr, "[%ld] task->client_pid_str = %s\n", (long) getpid (), task->client_pid_str);
 
@@ -272,18 +270,18 @@ void process_message (char *m)
   fprintf (stderr, "[%ld] task->pri = %llu\n", (long) getpid (), task->pri);
 
   tok = strtok (NULL, del);
-  task->src = malloc (strlen (tok) + 1);
+  task->src = mmalloc (strlen (tok) + 1);
   strcpy (task->src, tok);
   fprintf (stderr, "[%ld] task->src = %s\n", (long) getpid (), task->src);
 
   tok = strtok (NULL, del);
-  task->dst = malloc (strlen (tok) + 1);
+  task->dst = mmalloc (strlen (tok) + 1);
   strcpy (task->dst, tok);
   fprintf (stderr, "[%ld] task->dst = %s\n", (long) getpid (), task->dst);
 
   tok = strtok (NULL, del);
   task->num_ops = sstrtol (tok);
-  task->ops = malloc (task->num_ops);
+  task->ops = mmalloc (task->num_ops);
   fprintf (stderr, "[%ld] task->num_ops = %d\n", (long) getpid (), task->num_ops);
 
   memset (task->ops_totals, 0, NUMBER_OF_TRANSFORMATIONS);
@@ -306,17 +304,16 @@ void process_message (char *m)
   cclose (fd);
 }
 
-void sig_handler ()
+void sig_handler (__attribute__((unused)) int signum)
 { g.has_been_interrupted = 1; }
 
 void block_read ()
 {
   fprintf (stderr, "[%ld] entering block_read\n", (long) getpid ());
-  char buf[BUFSIZ];
-  size_t nbytes;
 
+  char buf[BUFSIZ];
   // assume client requests will not fill pipe buffer
-  nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
+  size_t nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
   if (g.has_been_interrupted)
     return;
   assert(nbytes < BUFSIZ);

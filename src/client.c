@@ -7,13 +7,13 @@
 #include <stdlib.h>
 
 #include "util/common.h"
-#include "util/util.h"
+#include "util/safe.h"
 
 static char FIFO[32];
-static void sig_handler ()
+static void sig_handler (__attribute__((unused)) int signum)
 {
   unlink (FIFO);
-  _exit (0);
+  _exit (EXIT_SUCCESS);
 }
 
 void delimcat (char *dest, const char *src)
@@ -22,43 +22,11 @@ void delimcat (char *dest, const char *src)
   strcat (dest, src);
 }
 
-void inter_message (const char *m0)
-{
-  char *m = malloc (strlen (m0) + 1);
-
-  const char del[2] = "\31";
-  char *tok;
-  tok = strtok (m, del);
-  fprintf (stderr, "task->client_pid_str = %s\n", tok);
-
-  tok = strtok (NULL, del);
-  fprintf (stderr, "command = %s\n", tok);
-
-  tok = strtok (NULL, del);
-  fprintf (stderr, "task->pri = %d\n", sstrtol (tok));
-
-  tok = strtok (NULL, del);
-  fprintf (stderr, "task->src = %s\n", tok);
-
-  tok = strtok (NULL, del);
-  fprintf (stderr, "task->dst = %s\n", tok);
-
-  tok = strtok (NULL, del);
-  fprintf (stderr, "task->num_ops = %d\n", sstrtol (tok));
-
-  tok = strtok (NULL, del);
-  transformation_t num_ops[NUMBER_OF_TRANSFORMATIONS] = {0};
-  for (int i = 0; tok != NULL; ++i, tok = strtok (NULL, del))
-    ++num_ops[transformation_str_to_enum (tok)];
-
-  for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
-    fprintf (stderr, "task->num_ops[%d] = %d\n", i, num_ops[i]);
-
-  free (m);
-}
-
 int main (int argc, char *argv[])
 {
+  signal (SIGINT, sig_handler);
+  signal (SIGTERM, sig_handler);
+
   fprintf (stderr, "[%ld] argc=%d\n", (long) getpid (), argc);
   if (argc < 2)
     {
@@ -111,21 +79,20 @@ int main (int argc, char *argv[])
       _exit (EXIT_SUCCESS);
     }
 
-  int fd = oopen (SERVER, O_WRONLY);
+
+  const int fd = oopen (SERVER, O_WRONLY);
   wwrite (fd, message, message_len);
   cclose (fd);
   fprintf (stderr, "[%ld] Message sent to '%s'\n", (long) getpid (), SERVER);
 
   strcpy (FIFO, client_pid_str);
-  signal (SIGINT, sig_handler);
-  signal (SIGTERM, sig_handler);
 
   char c;
 
   int loop = 1;
   while (loop)
     {
-      int in = oopen (client_pid_str, O_RDONLY);
+      const int in = oopen (client_pid_str, O_RDONLY);
       while (rread (in, &c, 1) > 0)
         {
           if (c != EOO)

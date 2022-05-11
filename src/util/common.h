@@ -8,7 +8,6 @@ typedef char transformation_t;
 enum {
     EOO = -128, /*END OF (operations)COMMUNICATION*/
     PROC_FILE,
-    UPDATE_RUNNING,
     STATUS,
     NOP=0,
     BCOMPRESS,
@@ -22,7 +21,5 @@ enum {
 
 transformation_t transformation_str_to_enum (const char* transformation_string);
 const char *transformation_enum_to_str (transformation_t t);
-
-void speakTo(const char* outFilename, char *ops);
 
 #endif //COMMON_H

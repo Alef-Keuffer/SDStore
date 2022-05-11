@@ -1,6 +1,6 @@
 #ifndef __SERVER_H_
 #define __SERVER_H_
-#include <sys/wait.h>
+#include <sys/types.h>
 #include "util/pqueue.h"
 #include "util/common.h"
 typedef struct task_t {
