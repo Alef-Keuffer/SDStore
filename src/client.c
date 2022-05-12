@@ -79,7 +79,6 @@ int main (int argc, char *argv[])
       _exit (EXIT_SUCCESS);
     }
 
-
   const int fd = oopen (SERVER, O_WRONLY);
   wwrite (fd, message, message_len);
   cclose (fd);
@@ -87,21 +86,23 @@ int main (int argc, char *argv[])
 
   strcpy (FIFO, client_pid_str);
 
-  char c;
-
+  char buf[BUFSIZ];
+  size_t nbytes;
   int loop = 1;
+  const int in = oopen (client_pid_str, O_RDONLY);
   while (loop)
     {
-      const int in = oopen (client_pid_str, O_RDONLY);
-      while (rread (in, &c, 1) > 0)
+      while ((nbytes = rread (in, buf, BUFSIZ)) > 0)
         {
-          if (c != EOO)
-            fprintf (stderr, "%c", c);
-          if (c == EOO)
-            loop = 0;
+          for (int j = 0; j < nbytes; ++j)
+            if (buf[j] == EOO)
+              loop = 0;
+          if (!loop)
+            buf[nbytes - 1] = '\0';
+          fprintf (stdout, "%s", buf);
         }
-      cclose (in);
     }
+  cclose (in);
 
   unlink (client_pid_str);
   fprintf (stderr, "[%ld] Unlinked %s\n", (long) getpid (), client_pid_str);

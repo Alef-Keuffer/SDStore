@@ -31,10 +31,10 @@ struct {
 
 void exec (transformation_t transformation)
 {
-  char command[BUFSIZ - sizeof (transformation_t)];
+  char command[BUFSIZ];
   const char *transformation_str = transformation_enum_to_str (transformation);
-  strcpy (command, g.TRANSFORMATIONS_FOLDER);
-  strcat (command, transformation_str);
+  strncpy (command, g.TRANSFORMATIONS_FOLDER, BUFSIZ);
+  strncat (command, transformation_str, BUFSIZ);
   fprintf (stderr, "[%ld] execl(%s)\n", (long) getpid (), command);
   eexecl (command, transformation_str, (char *) NULL);
 }
@@ -129,8 +129,8 @@ task_t *monitor_run_task (task_t *task)
   increment_active_transformations_count (task);
 
   {
-    int monitor_pid;
-    if ((monitor_pid = ffork ()))
+    int monitor_pid = ffork ();
+    if (monitor_pid)
       {
         task->monitor = monitor_pid;
         return task;
@@ -293,8 +293,8 @@ void block_read_fifo ()
   fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
   for (size_t i = 0; i < nbytes;)
     {
-      size_t j = strlen (buf + i) + 1;
-      process_message (buf + i);
+      size_t j = strlen (&buf[i]) + 1;
+      process_message (&buf[i]);
       i += j;
     }
 }
@@ -314,8 +314,8 @@ int next_pos (const int max_parallel_tasks, task_t *active_tasks[max_parallel_ta
     if (active_tasks[i] == NULL)
       return i;
 
-  fprintf(stderr,"ERROR: reached maximum number of parallel tasks\n");
-  _exit(EXIT_FAILURE);
+  fprintf (stderr, "ERROR: reached maximum number of parallel tasks\n");
+  _exit (EXIT_FAILURE);
 }
 
 static inline int queue_is_empty ()
@@ -359,10 +359,11 @@ void listening_loop ()
           fprintf (stderr, "[%ld] listening_loop: monitor %d is finished\n", (long) getpid (), monitor_pid);
 
           // search for task that was being executed by the monitor that just finished
-          int finished_task_index = 0;
-          for (; finished_task_index < max_parallel_tasks; ++finished_task_index)
+          int finished_task_index;
+          for (finished_task_index = 0; finished_task_index < max_parallel_tasks; ++finished_task_index)
             if (active_tasks[finished_task_index] != NULL && active_tasks[finished_task_index]->monitor == monitor_pid)
               break;
+          assert (finished_task_index < max_parallel_tasks);
           decrement_active_transformations_count (active_tasks[finished_task_index]);
 
           free_task (active_tasks[finished_task_index]);
@@ -411,10 +412,10 @@ int main (__attribute__((unused)) int argc, char *argv[])
       int j;
       for (j = i; buf[i] != ' '; ++i); // !isspace()
       buf[i++] = 0;
-      transformation_t transformation = transformation_str_to_enum (buf + j);
+      transformation_t transformation = transformation_str_to_enum (&buf[j]);
       for (j = i; buf[i] != 0 && buf[i] != '\n'; ++i);
       buf[i++] = 0;
-      g.get_transformation_active_limit[transformation] = sstrtol (buf + j);
+      g.get_transformation_active_limit[transformation] = sstrtol (&buf[j]);
     }
 
   // print the limits we loaded to the screen (just more debug info)
