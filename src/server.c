@@ -265,6 +265,20 @@ void process_message (char *m)
   for (transformation_t i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
     fprintf (stderr, "[%ld] task->ops_totals[%s] = %d\n", (long) getpid (), transformation_enum_to_str (i), task->ops_totals[i]);
 
+  for (transformation_t i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
+    {
+      if (task->ops_totals[i] > g.get_transformation_active_limit[i])
+        {
+          int fd = oopen (task->client_pid_str, O_WRONLY);
+          char task_is_not_possible[BUFSIZ];
+          const char *transformation_name = transformation_enum_to_str (i);
+          int n = snprintf (task_is_not_possible, BUFSIZ, "Task has more operations (%s = %d > limit[%s] = %d) than then current server supports. Therefore this task is impossible and will not be processed.\n\x80", transformation_name, task->ops_totals[i], transformation_name, g.get_transformation_active_limit[i]);
+          wwrite (fd, task_is_not_possible, n);
+          cclose (fd);
+          return;
+        }
+    }
+
   fprintf (stderr, "[%ld] task->ops =", (long) getpid ());
   for (int i = 0; i < task->num_ops; ++i)
     fprintf (stderr, " %s", transformation_enum_to_str (task->ops[i]));
