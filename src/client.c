@@ -1,10 +1,10 @@
-#include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
+#include <sys/unistd.h>
+#include <sys/fcntl.h>
 #include <sys/wait.h>
-#include <string.h>
+
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "util/common.h"
 #include "util/safe.h"

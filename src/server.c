@@ -128,12 +128,14 @@ task_t *monitor_run_task (task_t *task)
 
   increment_active_transformations_count (task);
 
-  int monitor_pid;
-  if ((monitor_pid = ffork ()))
-    {
-      task->monitor = monitor_pid;
-      return task;
-    }
+  {
+    int monitor_pid;
+    if ((monitor_pid = ffork ()))
+      {
+        task->monitor = monitor_pid;
+        return task;
+      }
+  }
 
   /* Without these ignore when, for example, ctrl-c is pressed in terminal
    * all child exec processes are terminated.
@@ -260,12 +262,16 @@ void process_message (char *m)
       ++task->ops_totals[transformation];
     }
 
+  for (transformation_t i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
+    fprintf (stderr, "[%ld] task->ops_totals[%s] = %d\n", (long) getpid (), transformation_enum_to_str (i), task->ops_totals[i]);
+
   fprintf (stderr, "[%ld] task->ops =", (long) getpid ());
   for (int i = 0; i < task->num_ops; ++i)
     fprintf (stderr, " %s", transformation_enum_to_str (task->ops[i]));
   fprintf (stderr, "\n");
 
   pqueue_insert (g.queue, task);
+
   int fd = oopen (task->client_pid_str, O_WRONLY);
   wwrite (fd, "pending\n", 8);
   cclose (fd);
@@ -307,6 +313,9 @@ int next_pos (const int max_parallel_tasks, task_t *active_tasks[max_parallel_ta
   for (int i = 0; i < max_parallel_tasks; ++i)
     if (active_tasks[i] == NULL)
       return i;
+
+  fprintf(stderr,"ERROR: reached maximum number of parallel tasks\n");
+  _exit(EXIT_FAILURE);
 }
 
 static inline int queue_is_empty ()
@@ -345,7 +354,6 @@ void listening_loop ()
       // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
       if (g.num_active_tasks > 0)
         {
-          // {runningLimit}
           fprintf (stderr, "[%ld] waiting a monitor\n", (long) getpid ());
           const int monitor_pid = wait (NULL);
           fprintf (stderr, "[%ld] listening_loop: monitor %d is finished\n", (long) getpid (), monitor_pid);

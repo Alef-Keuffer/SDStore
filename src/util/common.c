@@ -1,11 +1,8 @@
-#include <signal.h>
-#include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <string.h>
+#include <sys/unistd.h>
+
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "common.h"
 
@@ -62,73 +59,4 @@ const char *transformation_enum_to_str (const transformation_t t)
           _exit (EXIT_FAILURE);
         }
     }
-}
-
-void speakTo (const char *outFilename, char *ops)
-{
-  if (fork ())
-    {
-      wait (NULL);
-      return;
-    };
-
-  int n = 0;
-  while (ops[n++] != EOO);
-
-  int out = open (outFilename, O_WRONLY);
-  fprintf (stderr, "Opened speaking channel\n");
-  write (out, ops, n);
-  close (out);
-  fprintf (stderr, "Closed speaking channel\n");
-
-  _exit (0);
-}
-
-static char FIFO[32];
-static void sig_handler (int signum)
-{
-  signum++; // just for no error about unused variable
-  unlink (FIFO);
-  _exit (0);
-}
-
-void listenAs (const char *inFilename, void (*action) (char *), int isPassive)
-{
-  if (fork ())
-    return;
-
-  mkfifo (inFilename, S_IRWXU);
-  fprintf (stderr, "Created fifo\n");
-
-  strcpy (FIFO, inFilename);
-  signal (SIGINT, sig_handler);
-
-  char c;
-  char buf[BUFSIZ];
-  size_t i = 0;
-
-  int in;
-  reopen:
-  in = open (inFilename, O_RDONLY);
-  fprintf (stderr, "Openend listening channel\n");
-
-  while (read (in, &c, 1) > 0)
-    {
-      buf[i++] = c; //is reading message
-
-      if (c == EOO)
-        {
-          action (buf);
-          i = 0;
-        }
-    }
-
-  close (in);
-  fprintf (stderr, "Closed listening channel\n");
-  if (isPassive)
-    goto reopen;
-
-  unlink (inFilename);
-  fprintf (stderr, "Unlinked %s\n", inFilename);
-  _exit (0);
 }
