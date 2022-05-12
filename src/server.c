@@ -105,13 +105,8 @@ void pipe_progs (const task_t *task)
 
 int task_is_possible (const task_t *task)
 {
-  char opsTotal[NUMBER_OF_TRANSFORMATIONS] = {0};
-
-  for (int j = 0; j < task->num_ops; j++)
-    ++opsTotal[task->ops[j]];
-
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-    if (g.get_transformation_active_count[j] + opsTotal[j] > g.get_transformation_active_limit[j])
+    if (g.get_transformation_active_count[j] + task->ops_totals[j] > g.get_transformation_active_limit[j])
       return 0;
 
   return 1;
