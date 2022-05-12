@@ -1,5 +1,5 @@
-#ifndef __SERVER_H_
-#define __SERVER_H_
+#ifndef SERVER_H_
+#define SERVER_H_
 #include <sys/types.h>
 #include "util/pqueue.h"
 #include "util/common.h"
@@ -14,4 +14,4 @@ typedef struct task_t {
     pid_t monitor;
     char ops_totals[NUMBER_OF_TRANSFORMATIONS];
 } task_t;
-#endif //__SERVER_H_
+#endif //SERVER_H_

@@ -1,5 +1,5 @@
-#ifndef SDSTORE_UTIL_H
-#define SDSTORE_UTIL_H
+#ifndef SAFE_H
+#define SAFE_H
 #include <sys/types.h>
 size_t rread (int fd, void *buf, size_t nbytes);
 ssize_t wwrite(int fd, const void *buf, size_t nbytes);
@@ -12,4 +12,4 @@ pid_t ffork();
 void eexecl(const char* path, const char *arg,...);
 int ppipe(int *pipedes);
 int sstrtol (char *str);
-#endif //SDSTORE_UTIL_H
+#endif //SAFE_H
