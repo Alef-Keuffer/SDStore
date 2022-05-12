@@ -2,6 +2,7 @@
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <sys/errno.h>
+#include <sys/sendfile.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -148,4 +149,17 @@ void mmkfifo (const char *path, mode_t mode)
       perror ("mmkfifo");
       _exit (EXIT_FAILURE);
     }
+}
+
+ssize_t ssendfile(int out_fd, int in_fd, off_t *offset, size_t count) {
+  const ssize_t r = sendfile (out_fd,in_fd,offset,count);
+  if (r < 0) {
+    perror("ssendfile");
+    _exit(EXIT_FAILURE);
+  }
+  if (r < count) {
+    fprintf(stderr,"WARNING: ssendfile got count=%ld but wrote %ld",count,r);
+    _exit(EXIT_FAILURE);
+  }
+  return r;
 }

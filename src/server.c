@@ -14,14 +14,6 @@
 #include "util/safe.h"
 #include "_server.h"
 
-/*
-task_message ::= ⟨proc_file⟩ | ⟨status⟩
-  ⟨proc_file⟩ ::= ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
-  ⟨status⟩ ::= ⟨client_pid_str⟩ ⟨STATUS⟩
-
-⟨num_ops⟩ ::= ⟨int⟩
-*/
-
 struct {
   volatile sig_atomic_t has_been_interrupted;
   const char *TRANSFORMATIONS_FOLDER;
@@ -59,27 +51,6 @@ void pipe_progs (const task_t *task)
 
   const int last = program_num - 1;
 
-  // If there is only one transformation
-  if (program_num == 1)
-    {
-      if (ffork () != 0)
-        {
-          wait (NULL);
-          _exit (EXIT_SUCCESS);
-        }
-
-      fprintf (stderr, "[%ld] %s → p_0 → %s\n", (long) getpid (), src, dst);
-
-      fd = oopen (src, O_RDONLY);
-      ddup2 (fd, STDIN_FILENO);
-      cclose (fd);
-
-      fd = oopen (dst, O_WRONLY);
-      ddup2 (fd, STDOUT_FILENO);
-      cclose (fd);
-      exec (ops[0]);
-    }
-
   static const char READ_END = 0;
   static const char WRITE_END = 1;
 
@@ -89,43 +60,35 @@ void pipe_progs (const task_t *task)
         ppipe (pips[cs]);
 
       if (ffork ())
-        if (cs == 0)
-          cclose (pips[cs][WRITE_END]);
-        else if (cs == last)
-          cclose (pips[cs - 1][READ_END]);
-        else
-          {
+        {
+          if (cs != last)
             cclose (pips[cs][WRITE_END]);
+          if (cs != 0)
             cclose (pips[cs - 1][READ_END]);
-          }
-
+        }
       else
         {
+          if (cs != last)
+            cclose (pips[cs][READ_END]);
           if (cs == 0)
             {
-              cclose (pips[cs][READ_END]);
-
               fd = oopen (src, O_RDONLY);
               ddup2 (fd, STDIN_FILENO);
               cclose (fd);
-
-              ddup2 (pips[cs][WRITE_END], STDOUT_FILENO);
-              cclose (pips[cs][WRITE_END]);
             }
-          else if (cs == last)
+          if (cs == last)
             {
               fd = oopen (dst, O_WRONLY);
               ddup2 (fd, STDOUT_FILENO);
               cclose (fd);
-
-              ddup2 (pips[cs - 1][READ_END], STDIN_FILENO);
-              cclose (pips[cs - 1][READ_END]);
             }
-          else
+          if (cs != last)
             {
-              cclose (pips[cs][READ_END]);
               ddup2 (pips[cs][WRITE_END], STDOUT_FILENO);
               cclose (pips[cs][WRITE_END]);
+            }
+          if (cs != 0)
+            {
               ddup2 (pips[cs - 1][READ_END], STDIN_FILENO);
               cclose (pips[cs - 1][READ_END]);
             }
@@ -136,7 +99,7 @@ void pipe_progs (const task_t *task)
   pid_t pid;
   int status;
   while ((pid = waitpid (-1, &status, 0)) > 0)
-      fprintf (stderr, "[%ld] pipe_progs: %ld has finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), (long) pid, WIFEXITED(status), WEXITSTATUS(status));
+    fprintf (stderr, "[%ld] pipe_progs: %ld has finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), (long) pid, WIFEXITED(status), WEXITSTATUS(status));
   fprintf (stderr, "[%ld] pipe_progs: finished\n", (long) getpid ());
 }
 
@@ -148,8 +111,8 @@ int task_is_possible (const task_t *task)
     ++opsTotal[task->ops[j]];
 
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-      if (g.get_transformation_active_count[j] + opsTotal[j] > g.get_transformation_active_limit[j])
-        return 0;
+    if (g.get_transformation_active_count[j] + opsTotal[j] > g.get_transformation_active_limit[j])
+      return 0;
 
   return 1;
 }
@@ -215,7 +178,7 @@ void free_task (task_t *task)
 }
 
 /*!
- * @param[out] stats `\x80` terminated string with server status.
+ * @param[out] stats `\x80` terminated string with server status
  * @return length of string
  */
 size_t get_status_str (char stats[BUFSIZ])
@@ -233,6 +196,15 @@ size_t get_status_str (char stats[BUFSIZ])
   return strlen (stats);
 }
 
+/*!
+ * task_message ::= ⟨proc_file⟩ | ⟨status⟩
+ *      ⟨proc_file⟩ ::= ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
+ *      ⟨status⟩    ::= ⟨client_pid_str⟩ ⟨STATUS⟩
+ *
+ * ⟨num_ops⟩ ::= ⟨int⟩
+ *
+ * @param m ≡ task_message
+ */
 void process_message (char *m)
 {
   fprintf (stderr, "[%ld] process_message: %s\n", (long) getpid (), m);
@@ -307,7 +279,7 @@ void process_message (char *m)
 void sig_handler (__attribute__((unused)) int signum)
 { g.has_been_interrupted = 1; }
 
-void block_read ()
+void block_read_fifo ()
 {
   fprintf (stderr, "[%ld] entering block_read\n", (long) getpid ());
 
@@ -325,31 +297,31 @@ void block_read ()
       i += j;
     }
 }
+
 void decrement_active_transformations_count (const task_t *task)
 {
   for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
     g.get_transformation_active_count[j] -= task->ops_totals[j];
 }
 
-int next_pos (const int maxTasks, task_t *pid[maxTasks])
+/*!
+ * @return the smallest index at @p active_tasks that is not being used.
+ */
+int next_pos (const int max_parallel_tasks, task_t *active_tasks[max_parallel_tasks])
 {
-  int i;
-  for (i = 0; i < maxTasks; ++i)
-    if (pid[i] == NULL)
-      break;
-  return i;
+  for (int i = 0; i < max_parallel_tasks; ++i)
+    if (active_tasks[i] == NULL)
+      return i;
 }
 
 static inline int queue_is_empty ()
-{
-  return pqueue_size (g.queue) == 0;
-}
+{ return pqueue_size (g.queue) == 0; }
 
 void listening_loop ()
 {
   fprintf (stderr, "[%ld] entered listening_loop\n", (long) getpid ());
 
-  const int max_parallel_tasks = 100;
+  static const int max_parallel_tasks = 100;
   task_t *active_tasks[max_parallel_tasks];
   for (int i = 0; i < max_parallel_tasks; ++i)
     active_tasks[i] = NULL;
@@ -357,7 +329,7 @@ void listening_loop ()
   while (1)
     {
       while (!g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
-        block_read ();
+        block_read_fifo ();
 
       if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
@@ -396,9 +368,8 @@ void listening_loop ()
         }
     }
 }
-static char FIFO[32];
 
-int main (int argc, char *argv[])
+int main (__attribute__((unused)) int argc, char *argv[])
 {
   struct sigaction sa;
   sigemptyset (&sa.sa_mask);
@@ -408,7 +379,6 @@ int main (int argc, char *argv[])
   sigaction (SIGINT, &sa, NULL);
   sigaction (SIGTERM, &sa, NULL);
 
-  (void) argc; /* unused parameter */
   fprintf (stderr, "[%ld] loading config...\n\n", (long) getpid ());
   char buf[BUFSIZ];
   const char *config_file = argv[1];
@@ -416,11 +386,14 @@ int main (int argc, char *argv[])
   rread (fd, buf, BUFSIZ);
   cclose (fd);
   fprintf (stderr, "[%ld] config payload:\n\n```\n%s\n```\n\n", (long) getpid (), buf);
-  // if a file with the same name as our fifo exists we delete it
 
+  // if a file with the same name as our fifo exists we delete it
   if (access (SERVER, F_OK) == 0)
-    unlink (SERVER);
-  perror ("pipe_progs");
+    {
+      fprintf (stderr, "[%ld] deleting file %s which uses same name as our private fifo.", (long) getpid (), SERVER);
+      unlink (SERVER);
+    }
+
   g.queue = task_queue_init ();
 
   /* loading config: parses and loads the configuration file.
@@ -432,38 +405,33 @@ int main (int argc, char *argv[])
   int i = 0;
   while (buf[i] != 0)
     {
-      int j = i;
-      while (buf[i] != ' ') // !isspace()
-        i++;
+      int j;
+      for (j = i; buf[i] != ' '; ++i); // !isspace()
       buf[i++] = 0;
       transformation_t transformation = transformation_str_to_enum (buf + j);
-      j = i;
-      while (buf[i] != 0 && buf[i] != '\n')
-        i++;
+      for (j = i; buf[i] != 0 && buf[i] != '\n'; ++i);
       buf[i++] = 0;
       g.get_transformation_active_limit[transformation] = sstrtol (buf + j);
     }
-  fprintf (stderr, "[%ld] loaded config. Config is: \n\n```\n", (long) getpid ());
+
   // print the limits we loaded to the screen (just more debug info)
+  fprintf (stderr, "[%ld] loaded config. Config is: \n\n```\n", (long) getpid ());
   for (transformation_t j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
     fprintf (stderr, "limits[%s] = %d\n", transformation_enum_to_str (j), g.get_transformation_active_limit[j]);
   fprintf (stderr, "```\n\n");
   g.TRANSFORMATIONS_FOLDER = argv[2];
   fprintf (stderr, "[%ld] g.TRANSFORMATIONS_FOLDER = %s\n\n", (long) getpid (), g.TRANSFORMATIONS_FOLDER);
 
-  // starts actually being a server
-  // register action as callback in listenAs
-
   mmkfifo (SERVER, S_IRWXU);
-  fprintf (stderr, "[%ld] Created fifo\n", (long) getpid ());
+  fprintf (stderr, "[%ld] Created fifo %s\n", (long) getpid (), SERVER);
 
-  strcpy (FIFO, SERVER);
   g.server_fifo_rd = oopen (SERVER, O_RDONLY);
-  // opening for write only happens after first client writes to pipe
-  // since the command above blocks until someone opens pipe for writing
+  /* Opening for write only happens after first client writes to pipe
+   * since the command above blocks until someone opens pipe for writing */
   g.server_fifo_wr = oopen (SERVER, O_WRONLY);
 
   listening_loop ();
+
   cclose (g.server_fifo_rd);
   cclose (g.server_fifo_wr);
 
