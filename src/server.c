@@ -444,6 +444,11 @@ int main (__attribute__((unused)) int argc, char *argv[])
   fprintf (stderr, "[%ld] Created fifo %s\n", (long) getpid (), SERVER);
 
   g.server_fifo_rd = oopen (SERVER, O_RDONLY);
+  if (g.has_been_interrupted)
+    {
+      unlink (SERVER);
+      _exit(EXIT_SUCCESS);
+    }
   /* Opening for write only happens after first client writes to pipe
    * since the command above blocks until someone opens pipe for writing */
   g.server_fifo_wr = oopen (SERVER, O_WRONLY);

@@ -32,12 +32,13 @@ ssize_t my_read (int fd, void *buf, size_t nbytes)
 int oopen (const char *file, int oflag)
 {
   const int fd = open (file, oflag);
-  if (fd == -1 && errno !=  EINTR)
+  if (fd < 0)
     {
       fprintf (stderr, "[%ld] ", (long) getpid ());
       perror ("oopen");
       fprintf (stderr, "oopen failed with file: %s\n", file);
-      _exit (EXIT_FAILURE);
+      if (errno != EINTR)
+        _exit (EXIT_FAILURE);
     }
   return fd;
 }
@@ -151,15 +152,18 @@ void mmkfifo (const char *path, mode_t mode)
     }
 }
 
-ssize_t ssendfile(int out_fd, int in_fd, off_t *offset, size_t count) {
-  const ssize_t r = sendfile (out_fd,in_fd,offset,count);
-  if (r < 0) {
-    perror("ssendfile");
-    _exit(EXIT_FAILURE);
-  }
-  if (r < count) {
-    fprintf(stderr,"WARNING: ssendfile got count=%ld but wrote %ld",count,r);
-    _exit(EXIT_FAILURE);
-  }
+ssize_t ssendfile (int out_fd, int in_fd, off_t *offset, size_t count)
+{
+  const ssize_t r = sendfile (out_fd, in_fd, offset, count);
+  if (r < 0)
+    {
+      perror ("ssendfile");
+      _exit (EXIT_FAILURE);
+    }
+  if (r < count)
+    {
+      fprintf (stderr, "WARNING: ssendfile got count=%ld but wrote %ld", count, r);
+      _exit (EXIT_FAILURE);
+    }
   return r;
 }

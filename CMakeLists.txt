@@ -21,11 +21,17 @@ add_custom_target(
 )
 add_dependencies(docs server client)
 
-foreach(target server client main util)
+set(targets server client main util)
+file(GLOB TEST_FILES tests/*)
+
+foreach(target ${targets})
 add_custom_command(
         TARGET ${target}
         POST_BUILD
         COMMAND doxygen Doxyfile
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+add_custom_command(TARGET ${target} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy ${TEST_FILES} ${CMAKE_CURRENT_BINARY_DIR}
 )
 endforeach()
