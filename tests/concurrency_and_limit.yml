@@ -1,9 +1,12 @@
 name: concurrency_and_limit
 
+server_loc: ../build/server
+client_loc: ../build/client
+
 windows:
   - concurrency_and_limit:
       panes:
-        - ./server ../etc/sdstored.conf ../bin/sdstore-transformations/
-        - sleep 1; ./client proc-file 1 filein fileout nop nop nop nop nop nop
-        - sleep 2; ./client proc-file 1 filein1 fileout1 nop encrypt decrypt
-        - sleep 2; ./client proc-file 5 filein2 fileout2 nop bcompress bdecompress
+        - ../build/server ../etc/sdstored.conf ../bin/sdstore-transformations/
+        - sleep 1; ../build/client proc-file 1 filein fileout nop nop nop nop nop nop
+        - sleep 2; ../build/client proc-file 1 filein1 fileout1 nop encrypt decrypt
+        - sleep 3; ../build/client proc-file 5 filein2 fileout2 nop bcompress bdecompress
