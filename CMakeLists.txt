@@ -35,3 +35,9 @@ add_custom_command(TARGET ${target} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy ${TEST_FILES} ${CMAKE_CURRENT_BINARY_DIR}
 )
 endforeach()
+
+add_custom_target(
+        test1
+        COMMAND konsole --noclose -e ./test_script.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
