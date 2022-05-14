@@ -10,6 +10,8 @@ build/**
 docs/**
 
 tests/file*
+tests/bin/**
+tests/sdstored.conf
 tests/client
 tests/server
 
