@@ -4,7 +4,7 @@
 num_files=5
 
 # Size of each input file. Should be 10M+ to create scenarios with interesting delay.
-file_size="1M"
+file_size="100M"
 
 for ((i=1;i<=num_files;i++)); do
     rm -f filein"$i";
