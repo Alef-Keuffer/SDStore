@@ -3,7 +3,7 @@ name: priority
 windows:
   - priority:
       panes:
-        - ./server ../etc/sdstored.conf ../bin/sdstore-transformations/
+        - ./server etc/sdstored.conf bin/sdstore-transformations/
         - sleep 1; ./client proc-file 1 filein fileout nop nop nop nop nop nop
         - sleep 1; ./client proc-file 1 filein1 fileout1 nop bcompress bcompress bdecompress bdecompress
         - sleep 1; ./client proc-file 5 filein2 fileout2 nop bcompress encrypt decrypt bdecompress

@@ -1,6 +1,6 @@
 .vscode/**
 *.o
-bin/**
+cmake-build-debug/bin/**
 docs/**
 build/**
 tests/file**
