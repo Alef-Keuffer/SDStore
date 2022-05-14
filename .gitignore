@@ -5,3 +5,4 @@ docs/**
 build/**
 tests/file**
 inline_umlgraph_cache_all.pu
+Makefile
