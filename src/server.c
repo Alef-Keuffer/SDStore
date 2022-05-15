@@ -333,7 +333,8 @@ void process_message (char *m)
 }
 
 void sig_handler (__attribute__((unused)) int signum)
-{ g.has_been_interrupted = 1; }
+{ unlink (SERVER);
+  g.has_been_interrupted = 1; }
 
 void block_read_fifo ()
 {
@@ -396,7 +397,7 @@ void listening_loop ()
         {
           int monitor_pid, status;
           fprintf (stderr, "[%ld] listening_loop: waiting a monitor\n", (long) getpid ());
-          while ((monitor_pid = waitpid (-1, &status, WNOHANG)) > 0)
+          while ((monitor_pid = waitpid (-1, &status, WNOHANG*(!g.has_been_interrupted))) > 0)
             {
               fprintf (stderr, "[%ld] listening_loop: monitor %d is finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), monitor_pid, WIFEXITED(status), WEXITSTATUS(status));
 
