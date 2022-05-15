@@ -14,7 +14,9 @@
 #include "util/safe.h"
 #include "_server.h"
 
-enum { GLOBAL_MAX_PARALLEL_TASKS = 256 };
+enum {
+  GLOBAL_MAX_PARALLEL_TASKS = 256
+};
 struct {
   volatile sig_atomic_t has_been_interrupted;
   const int max_parallel_task;
@@ -184,7 +186,7 @@ task_t *monitor_run_task (task_t *task)
   cclose (client_fd);
 
   const char finished_task = FINISHED_TASK;
-  wwrite(g.server_fifo_wr,&finished_task,1);
+  wwrite (g.server_fifo_wr, &finished_task, 1);
 
   _exit (EXIT_SUCCESS);
 }
@@ -209,20 +211,23 @@ size_t get_status_str (char stat_message[BUFSIZ])
   snprintf (buf, BUFSIZ, "Number of active tasks: %d\n", g.num_active_tasks);
   strcat (stat_message, buf);
 
-  for (int i = 0; i < GLOBAL_MAX_PARALLEL_TASKS; ++i) {
-    const task_t *task = g.active_tasks[i];
-    if (task == NULL) continue;
-    snprintf (buf, BUFSIZ, "task [pid=%s]: proc-file %llu %s %s", task->client_pid_str, task->pri, task->src, task->dst);
-    strcat (stat_message, buf);
-    for (int j = 0; j < task->num_ops; ++j) {
-      strcat (stat_message, " ");
-      strcat (stat_message, transformation_enum_to_str (task->ops[j]));
+  for (int i = 0; i < GLOBAL_MAX_PARALLEL_TASKS; ++i)
+    {
+      const task_t *task = g.active_tasks[i];
+      if (task == NULL)
+        continue;
+      snprintf (buf, BUFSIZ, "task [pid=%s]: proc-file %llu %s %s", task->client_pid_str, task->pri, task->src, task->dst);
+      strcat (stat_message, buf);
+      for (int j = 0; j < task->num_ops; ++j)
+        {
+          strcat (stat_message, " ");
+          strcat (stat_message, transformation_enum_to_str (task->ops[j]));
+        }
+      strcat (stat_message, "\n");
     }
-    strcat (stat_message, "\n");
-  }
   for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
     {
-      snprintf (buf, BUFSIZ, "transf %s: %d/%d (running/max)\n", transformation_enum_to_str (i), g.get_transformation_active_count[i],g.get_transformation_active_limit[i]);
+      snprintf (buf, BUFSIZ, "transf %s: %d/%d (running/max)\n", transformation_enum_to_str (i), g.get_transformation_active_count[i], g.get_transformation_active_limit[i]);
       strcat (stat_message, buf);
     }
   strcat (stat_message, "\x80");
@@ -340,7 +345,7 @@ void block_read_fifo ()
   fprintf (stderr, "[%ld] unblocked from fifo read\n", (long) getpid ());
   if (g.has_been_interrupted)
     return;
-  assert(nbytes> 0 && nbytes < BUFSIZ);
+  assert(nbytes > 0 && nbytes < BUFSIZ);
   if (buf[0] == FINISHED_TASK)
     return;
   fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
