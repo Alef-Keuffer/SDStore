@@ -7,6 +7,7 @@ typedef char transformation_t;
 
 enum {
     EOO = -128, /*END OF (operations)COMMUNICATION*/
+    FINISHED_TASK,
     PROC_FILE,
     STATUS,
     NOP=0,

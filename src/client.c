@@ -87,6 +87,7 @@ int main (int argc, char *argv[])
   strcpy (FIFO, client_pid_str);
 
   char buf[BUFSIZ];
+  char formatted_message[BUFSIZ];
   size_t nbytes;
   int loop = 1;
   const int in = oopen (client_pid_str, O_RDONLY);
@@ -99,7 +100,8 @@ int main (int argc, char *argv[])
               loop = 0;
           if (!loop)
             buf[nbytes - 1] = '\0';
-          fprintf (stdout, "%s", buf);
+          const int formatted_message_size = snprintf(formatted_message,nbytes+1,"%s",buf);
+          wwrite(STDOUT_FILENO,formatted_message,formatted_message_size);
         }
     }
   cclose (in);

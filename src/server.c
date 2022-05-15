@@ -162,6 +162,9 @@ task_t *monitor_run_task (task_t *task)
   wwrite (client_fd, completed_message, completed_message_length);
   cclose (client_fd);
 
+  const char finished_task = FINISHED_TASK;
+  wwrite(g.server_fifo_wr,&finished_task,1);
+
   _exit (EXIT_SUCCESS);
 }
 
@@ -296,14 +299,17 @@ void sig_handler (__attribute__((unused)) int signum)
 
 void block_read_fifo ()
 {
-  fprintf (stderr, "[%ld] entering block_read\n", (long) getpid ());
-
   char buf[BUFSIZ];
   // assume client requests will not fill pipe buffer
+
+  fprintf (stderr, "[%ld] will block on fifo read\n", (long) getpid ());
   size_t nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
+  fprintf (stderr, "[%ld] unblocked from fifo read\n", (long) getpid ());
   if (g.has_been_interrupted)
     return;
-  assert(nbytes < BUFSIZ);
+  assert(nbytes> 0 && nbytes < BUFSIZ);
+  if (buf[0] == FINISHED_TASK)
+    return;
   fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
   for (size_t i = 0; i < nbytes;)
     {
@@ -346,11 +352,35 @@ void listening_loop ()
 
   while (1)
     {
-      while (!g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
+      if (!g.has_been_interrupted)
         block_read_fifo ();
 
       if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
+
+      // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
+      if (g.num_active_tasks > 0)
+        {
+          int monitor_pid, status;
+          fprintf (stderr, "[%ld] listening_loop: waiting a monitor\n", (long) getpid ());
+          while ((monitor_pid = waitpid (-1, &status, WNOHANG)) > 0)
+            {
+              fprintf (stderr, "[%ld] listening_loop: monitor %d is finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), monitor_pid, WIFEXITED(status), WEXITSTATUS(status));
+
+              // search for task that was being executed by the monitor that just finished
+              int finished_task_index;
+              for (finished_task_index = 0; finished_task_index < max_parallel_tasks; ++finished_task_index)
+                if (active_tasks[finished_task_index] != NULL
+                    && active_tasks[finished_task_index]->monitor == monitor_pid)
+                  break;
+              assert (finished_task_index < max_parallel_tasks);
+              decrement_active_transformations_count (active_tasks[finished_task_index]);
+
+              free_task (active_tasks[finished_task_index]);
+              active_tasks[finished_task_index] = NULL;
+              --g.num_active_tasks;
+            }
+        }
 
       for (task_t *task = pqueue_peek (g.queue); task != NULL; task = pqueue_peek (g.queue))
         {
@@ -363,26 +393,6 @@ void listening_loop ()
             }
           else
             break;
-        }
-
-      // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
-      if (g.num_active_tasks > 0)
-        {
-          fprintf (stderr, "[%ld] waiting a monitor\n", (long) getpid ());
-          const int monitor_pid = wait (NULL);
-          fprintf (stderr, "[%ld] listening_loop: monitor %d is finished\n", (long) getpid (), monitor_pid);
-
-          // search for task that was being executed by the monitor that just finished
-          int finished_task_index;
-          for (finished_task_index = 0; finished_task_index < max_parallel_tasks; ++finished_task_index)
-            if (active_tasks[finished_task_index] != NULL && active_tasks[finished_task_index]->monitor == monitor_pid)
-              break;
-          assert (finished_task_index < max_parallel_tasks);
-          decrement_active_transformations_count (active_tasks[finished_task_index]);
-
-          free_task (active_tasks[finished_task_index]);
-          active_tasks[finished_task_index] = NULL;
-          --g.num_active_tasks;
         }
     }
 }
@@ -447,7 +457,7 @@ int main (__attribute__((unused)) int argc, char *argv[])
   if (g.has_been_interrupted)
     {
       unlink (SERVER);
-      _exit(EXIT_SUCCESS);
+      _exit (EXIT_SUCCESS);
     }
   /* Opening for write only happens after first client writes to pipe
    * since the command above blocks until someone opens pipe for writing */
