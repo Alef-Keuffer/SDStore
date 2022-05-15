@@ -14,8 +14,11 @@
 #include "util/safe.h"
 #include "_server.h"
 
+enum { GLOBAL_MAX_PARALLEL_TASKS = 256 };
 struct {
   volatile sig_atomic_t has_been_interrupted;
+  const int max_parallel_task;
+  task_t *active_tasks[GLOBAL_MAX_PARALLEL_TASKS];
   const char *TRANSFORMATIONS_FOLDER;
   int server_fifo_rd;
   int server_fifo_wr;
@@ -26,7 +29,8 @@ struct {
 } g = {
     .has_been_interrupted = 0,
     .num_active_tasks = 0,
-    .get_transformation_active_count = {0}
+    .get_transformation_active_count = {0},
+    .active_tasks = {NULL}
 };
 
 void exec (transformation_t transformation)
@@ -178,22 +182,34 @@ void free_task (task_t *task)
 }
 
 /*!
- * @param[out] stats `\x80` terminated string with server status
+ * @param[out] stat_message `\x80` terminated string with server status
  * @return length of string
  */
-size_t get_status_str (char stats[BUFSIZ])
+size_t get_status_str (char stat_message[BUFSIZ])
 {
-  stats[0] = 0;
+  stat_message[0] = 0;
   char buf[BUFSIZ];
   snprintf (buf, BUFSIZ, "Number of active tasks: %d\n", g.num_active_tasks);
-  strcat (stats, buf);
+  strcat (stat_message, buf);
+
+  for (int i = 0; i < GLOBAL_MAX_PARALLEL_TASKS; ++i) {
+    const task_t *task = g.active_tasks[i];
+    if (task == NULL) continue;
+    snprintf (buf, BUFSIZ, "task [pid=%s]: proc-file %llu %s %s", task->client_pid_str, task->pri, task->src, task->dst);
+    strcat (stat_message, buf);
+    for (int j = 0; j < task->num_ops; ++j) {
+      strcat (stat_message, " ");
+      strcat (stat_message, transformation_enum_to_str (task->ops[j]));
+    }
+    strcat (stat_message, "\n");
+  }
   for (int i = 0; i < NUMBER_OF_TRANSFORMATIONS; ++i)
     {
-      snprintf (buf, BUFSIZ, "%s : %d\n", transformation_enum_to_str (i), g.get_transformation_active_count[i]);
-      strcat (stats, buf);
+      snprintf (buf, BUFSIZ, "transf %s: %d/%d (running/max)\n", transformation_enum_to_str (i), g.get_transformation_active_count[i],g.get_transformation_active_limit[i]);
+      strcat (stat_message, buf);
     }
-  strcat (stats, "\x80");
-  return strlen (stats);
+  strcat (stat_message, "\x80");
+  return strlen (stat_message);
 }
 
 /*!
@@ -345,11 +361,6 @@ void listening_loop ()
 {
   fprintf (stderr, "[%ld] entered listening_loop\n", (long) getpid ());
 
-  static const int max_parallel_tasks = 100;
-  task_t *active_tasks[max_parallel_tasks];
-  for (int i = 0; i < max_parallel_tasks; ++i)
-    active_tasks[i] = NULL;
-
   while (1)
     {
       if (!g.has_been_interrupted)
@@ -369,15 +380,15 @@ void listening_loop ()
 
               // search for task that was being executed by the monitor that just finished
               int finished_task_index;
-              for (finished_task_index = 0; finished_task_index < max_parallel_tasks; ++finished_task_index)
-                if (active_tasks[finished_task_index] != NULL
-                    && active_tasks[finished_task_index]->monitor == monitor_pid)
+              for (finished_task_index = 0; finished_task_index < GLOBAL_MAX_PARALLEL_TASKS; ++finished_task_index)
+                if (g.active_tasks[finished_task_index] != NULL
+                    && g.active_tasks[finished_task_index]->monitor == monitor_pid)
                   break;
-              assert (finished_task_index < max_parallel_tasks);
-              decrement_active_transformations_count (active_tasks[finished_task_index]);
+              assert (finished_task_index < GLOBAL_MAX_PARALLEL_TASKS);
+              decrement_active_transformations_count (g.active_tasks[finished_task_index]);
 
-              free_task (active_tasks[finished_task_index]);
-              active_tasks[finished_task_index] = NULL;
+              free_task (g.active_tasks[finished_task_index]);
+              g.active_tasks[finished_task_index] = NULL;
               --g.num_active_tasks;
             }
         }
@@ -386,9 +397,9 @@ void listening_loop ()
         {
           if (task_is_possible (task))
             {
-              const int i = next_pos (max_parallel_tasks, active_tasks);
+              const int i = next_pos (GLOBAL_MAX_PARALLEL_TASKS, g.active_tasks);
               task_t *active_task = monitor_run_task (pqueue_pop (g.queue));
-              active_tasks[i] = active_task;
+              g.active_tasks[i] = active_task;
               ++g.num_active_tasks;
             }
           else
