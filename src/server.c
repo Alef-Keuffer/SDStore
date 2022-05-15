@@ -313,7 +313,7 @@ void process_message (char *m)
           int fd = oopen (task->client_pid_str, O_WRONLY);
           char task_is_not_possible[BUFSIZ];
           const char *transformation_name = transformation_enum_to_str (i);
-          int n = snprintf (task_is_not_possible, BUFSIZ, "Task has more operations (%s = %d > limit[%s] = %d) than then current server supports. Therefore this task is impossible and will not be processed.\n\x80", transformation_name, task->ops_totals[i], transformation_name, g.get_transformation_active_limit[i]);
+          int n = snprintf (task_is_not_possible, BUFSIZ, "Task has more operations (%s = %d > limit[%s] = %d) than current server supports. Therefore this task is impossible and will not be processed.\n\x80", transformation_name, task->ops_totals[i], transformation_name, g.get_transformation_active_limit[i]);
           wwrite (fd, task_is_not_possible, n);
           cclose (fd);
           return;
@@ -396,7 +396,7 @@ void listening_loop ()
       if (g.num_active_tasks > 0)
         {
           int monitor_pid, status;
-          fprintf (stderr, "[%ld] listening_loop: waiting a monitor\n", (long) getpid ());
+          fprintf (stderr, "[%ld] listening_loop: waiting for a task monitor\n", (long) getpid ());
           while ((monitor_pid = waitpid (-1, &status, WNOHANG*(!g.has_been_interrupted))) > 0)
             {
               fprintf (stderr, "[%ld] listening_loop: monitor %d is finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), monitor_pid, WIFEXITED(status), WEXITSTATUS(status));

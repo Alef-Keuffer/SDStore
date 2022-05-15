@@ -11,7 +11,9 @@
 
 # Build the project executables, and return to project's root.
 # Subshell, same as above.
-cmake --build ./build --config Release --target all -j 18 --
+
+# If IDE cmake is working, this step may be skipped.
+#cmake --build ./build --config Release --target all -j 18 --
 
 rm -f tests/server
 rm -f tests/client
