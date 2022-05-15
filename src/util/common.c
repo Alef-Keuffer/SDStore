@@ -8,7 +8,7 @@
 
 const char *const SERVER = "SERVER";
 
-transformation_t transformation_str_to_enum (const char *transformation_string)
+transformation_t transformation_str_to_enum__ (const char *transformation_string)
 {
   if (!strcmp ("bcompress", transformation_string))
     return BCOMPRESS;
@@ -29,10 +29,17 @@ transformation_t transformation_str_to_enum (const char *transformation_string)
   else if (!strcmp ("proc-file", transformation_string))
     return PROC_FILE;
   else
-    {
+    return -1;
+}
+
+transformation_t transformation_str_to_enum (const char *transformation_string)
+{
+  transformation_t transformation_enum = transformation_str_to_enum__ (transformation_string);
+  if (transformation_enum == -1) {
       fprintf (stderr, "transformation_get_value: Unknown transformation %s", transformation_string);
       _exit (EXIT_FAILURE);
-    }
+  }
+  return transformation_enum;
 }
 
 const char *transformation_enum_to_str (const transformation_t t)

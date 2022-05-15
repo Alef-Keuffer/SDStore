@@ -22,5 +22,5 @@ enum {
 
 transformation_t transformation_str_to_enum (const char* transformation_string);
 const char *transformation_enum_to_str (transformation_t t);
-
+transformation_t transformation_str_to_enum__ (const char *transformation_string);
 #endif //COMMON_H

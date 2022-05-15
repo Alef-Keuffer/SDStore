@@ -62,10 +62,25 @@ int main (int argc, char *argv[])
           --i;
         }
 
-      const char *src = argv[++i];
-      const char *dst = argv[++i];
-      const int transformation_start_index = ++i;
+      const int pri_int = atoi(priority);
+      if (!(pri_int >= 0 && pri_int <=5)) {
+        wwrite(STDOUT_FILENO,"(ERROR) priority must be between 0 and 5\n",41);
+        _exit(EXIT_FAILURE);
+      }
 
+      const char *src = argv[++i];
+      if ((access (src, F_OK) != 0))
+        {
+          wwrite(STDOUT_FILENO,"(ERROR): Could not find src file\n",32);
+          _exit (EXIT_SUCCESS);
+        }
+      const char *dst = argv[++i];
+      if ((access (dst, F_OK) != 0))
+        {
+          wwrite(STDOUT_FILENO,"(ERROR) Could not find dst file\n",32);
+          _exit (EXIT_SUCCESS);
+        }
+      const int transformation_start_index = ++i;
       char num_transformations[16];
       snprintf (num_transformations, 16, "%d", argc - transformation_start_index);
 
@@ -74,8 +89,17 @@ int main (int argc, char *argv[])
       delimcat (message, dst);
       delimcat (message, num_transformations);
       int j = transformation_start_index;
-      for (; j < argc; ++j)
+      for (; j < argc; ++j) {
+        // transformation_str_to_enum used to cause failure in case transformation does not exist
+        if (transformation_str_to_enum__(argv[j]) == -1)
+          {
+            char error_message[256];
+            int error_message_size = snprintf (error_message, 256,"(ERROR) Unknown transformation: %s\n", argv[j]);
+            wwrite (STDOUT_FILENO,error_message,error_message_size);
+            _exit(EXIT_FAILURE);
+          }
         delimcat (message, argv[j]);
+      }
     }
 
   mmkfifo (client_pid_str, S_IRWXU);
@@ -86,7 +110,7 @@ int main (int argc, char *argv[])
 
   if ((access (SERVER, F_OK) != 0))
     {
-      fprintf (stderr, "Could not find server fifo, try again later\n");
+      wwrite(STDOUT_FILENO,"ERROR: Could not find server fifo, try again later\n",51);
       _exit (EXIT_SUCCESS);
     }
 
