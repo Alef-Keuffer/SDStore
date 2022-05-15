@@ -45,6 +45,15 @@ int main (int argc, char *argv[])
 
   int i = 0;
   const char *command = argv[++i];
+  {
+    transformation_t t = transformation_str_to_enum__ (command);
+    if (t == -1 || !(t == PROC_FILE || t == STATUS)) {
+        char error_message[256];
+        int error_message_size = snprintf (error_message, 256,"(ERROR) Unknown command: %s\n", command);
+        wwrite (STDOUT_FILENO,error_message,error_message_size);
+        _exit(EXIT_FAILURE);
+    }
+  }
   delimcat (message, command);
 
   if (argc > 2)
@@ -91,7 +100,8 @@ int main (int argc, char *argv[])
       int j = transformation_start_index;
       for (; j < argc; ++j) {
         // transformation_str_to_enum used to cause failure in case transformation does not exist
-        if (transformation_str_to_enum__(argv[j]) == -1)
+        transformation_t t = transformation_str_to_enum__(argv[j]);
+        if (t == -1 || t == PROC_FILE || t == STATUS)
           {
             char error_message[256];
             int error_message_size = snprintf (error_message, 256,"(ERROR) Unknown transformation: %s\n", argv[j]);
