@@ -50,7 +50,18 @@ int main (int argc, char *argv[])
   if (argc > 2)
     {
       // e.g.: ./sdstore proc-file <priority> samples/file-a outputs/file-a-output bcompress nop gcompress encrypt no
-      const char *priority = argv[++i];
+      ++i;
+      char *priority;
+      if (!strcmp(argv[i],"-p"))
+        priority  = argv[++i];
+      else if (atoi(argv[i]))
+        priority  = argv[i];
+      else
+        {
+          priority = "0";
+          --i;
+        }
+
       const char *src = argv[++i];
       const char *dst = argv[++i];
       const int transformation_start_index = ++i;
