@@ -154,7 +154,7 @@ task_t *monitor_run_task (task_t *task)
 
   pipe_progs (task);
 
-  /**
+  /*
    * Semantics is important. Notice the purpose of the two functions:
    *
    * 1. `open`: Open a file for reading or writing
