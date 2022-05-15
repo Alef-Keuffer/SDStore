@@ -429,6 +429,9 @@ void listening_loop ()
     }
 }
 
+void sig_child(__attribute__((unused)) int signum)
+{ wwaitpid (-1,NULL,0); }
+
 int main (__attribute__((unused)) int argc, char *argv[])
 {
   struct sigaction sa;
@@ -438,6 +441,18 @@ int main (__attribute__((unused)) int argc, char *argv[])
 
   sigaction (SIGINT, &sa, NULL);
   sigaction (SIGTERM, &sa, NULL);
+
+  /**
+   * POSIX.1-1990 disallowed setting the action for SIGCHLD to
+   * SIG_IGN.  POSIX.1-2001 and later allow this possibility, so that
+   * ignoring SIGCHLD can be used to prevent the creation of zombies
+   * (see wait(2)).  Nevertheless, the historical BSD and System V
+   * behaviors for ignoring SIGCHLD differ, so that the only
+   * completely portable method of ensuring that terminated children
+   * do not become zombies is to catch the SIGCHLD signal and perform
+   * a wait(2) or similar. (https://man7.org/linux/man-pages/man2/sigaction.2.html)
+   */
+  signal(SIGCHLD, sig_child);
 
   fprintf (stderr, "[%ld] loading config...\n\n", (long) getpid ());
   char buf[BUFSIZ];

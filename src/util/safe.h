@@ -12,4 +12,5 @@ pid_t ffork();
 void eexecl(const char* path, const char *arg,...);
 int ppipe(int *pipedes);
 int sstrtol (char *str);
+pid_t wwaitpid(pid_t pid, int *stat_loc, int options);
 #endif //SAFE_H
