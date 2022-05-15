@@ -1,0 +1,9 @@
+name: concurrency
+
+windows:
+  - concurrency_and_limit:
+      panes:
+        - ./server sdstored.conf bin/
+        - sleep 1; ./client proc-file 1 filein1 fileout1 bcompress bdecompress
+        - sleep 1; ./client proc-file 1 filein2 fileout2 bcompress bdecompress
+        - sleep 1; ./client proc-file 1 filein3 fileout3 bcompress bdecompress

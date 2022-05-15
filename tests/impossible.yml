@@ -1,0 +1,7 @@
+name: impossible
+
+windows:
+  - priority:
+      panes:
+        - ./server sdstored.conf bin/
+        - sleep 2; ./client proc-file 1 filein1 fileout1 gcompress gcompress gcompress gcompress

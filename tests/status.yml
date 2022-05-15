@@ -1,0 +1,9 @@
+name: status
+
+windows:
+  - priority:
+      panes:
+        - ./server sdstored.conf bin/
+        - sleep 1; ./client proc-file 1 filein1 fileout1 nop nop bcompress encrypt decrypt bdecompress
+        - sleep 1; ./client proc-file 1 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress
+        - sleep 3; ./client status
