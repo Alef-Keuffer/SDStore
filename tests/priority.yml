@@ -1,9 +1,11 @@
 name: priority
 
+# Resultado esperado: que o primeiro pedido bloqueie os outros, e que
+# o pedido com prioridade mais alta, feito no fim, corra em segundo lugar.
 windows:
   - priority:
       panes:
         - ./server sdstored.conf bin/
         - sleep 1; ./client proc-file 1 filein1 fileout1 nop nop nop nop nop nop bcompress
-        - sleep 2; ./client proc-file 3 filein2 fileout2 nop bcompress gcompress
-        - sleep 3; ./client proc-file 5 filein3 fileout3 nop bcompress encrypt
+        - sleep 2; ./client proc-file 3 filein2 fileout2 nop bcompress gcompress gcompress
+        - sleep 3; ./client proc-file 5 filein3 fileout3 nop bcompress gcompress gcompress

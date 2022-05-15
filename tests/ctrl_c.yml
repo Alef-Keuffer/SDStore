@@ -3,6 +3,8 @@ name: ctrl_c
 windows:
   - priority:
       panes:
+        # Não esquecer de enviar CTRL^C à primeira tela do tmux para parar o servidor,
+        # Depois, correr o cliente na quarta janela para verificar que não pode fazer pedidos.
         - ./server sdstored.conf bin/
         - sleep 1; ./client proc-file 1 filein1 fileout1 bcompress bcompress nop nop nop nop nop nop
         - sleep 1; ./client proc-file 3 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress

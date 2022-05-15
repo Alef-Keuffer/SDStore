@@ -1,5 +1,6 @@
 name: concurrency
 
+# Resultado esperado: que os três pedidos sejam executados simultaneamente.
 windows:
   - concurrency_and_limit:
       panes:

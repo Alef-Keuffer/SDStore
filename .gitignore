@@ -17,3 +17,5 @@ tests/server
 
 inline_umlgraph_cache_all.pu
 Makefile
+
+report/**

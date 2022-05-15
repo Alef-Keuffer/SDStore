@@ -336,7 +336,7 @@ void sig_handler (__attribute__((unused)) int signum)
 { unlink (SERVER);
   g.has_been_interrupted = 1; }
 
-void block_read_fifo ()
+pid_t block_read_fifo ()
 {
   char buf[BUFSIZ];
   // assume client requests will not fill pipe buffer
@@ -345,10 +345,14 @@ void block_read_fifo ()
   size_t nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
   fprintf (stderr, "[%ld] unblocked from fifo read\n", (long) getpid ());
   if (g.has_been_interrupted)
-    return;
+    return -1;
   assert(nbytes > 0 && nbytes < BUFSIZ);
-  if (buf[0] == FINISHED_TASK)
-    return;
+  if (buf[0] == FINISHED_TASK) {
+    int pid, st;
+    pid = waitpid(-1, &st, 0);
+    return pid;
+  }
+
   fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
   for (size_t i = 0; i < nbytes;)
     {
@@ -356,6 +360,7 @@ void block_read_fifo ()
       process_message (&buf[i]);
       i += j;
     }
+    return -1;
 }
 
 void decrement_active_transformations_count (const task_t *task)
@@ -386,8 +391,13 @@ void listening_loop ()
 
   while (1)
     {
-      if (!g.has_been_interrupted)
-        block_read_fifo ();
+      int monitor_pid;
+      if (!g.has_been_interrupted) {
+        monitor_pid = block_read_fifo ();
+        if (monitor_pid != -1) {
+          goto task_cleanup;
+        }
+      }
 
       if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
@@ -395,7 +405,7 @@ void listening_loop ()
       // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
       if (g.num_active_tasks > 0)
         {
-          int monitor_pid, status;
+          int status;
           fprintf (stderr, "[%ld] listening_loop: waiting for a task monitor\n", (long) getpid ());
           while ((monitor_pid = waitpid (-1, &status, WNOHANG*(!g.has_been_interrupted))) > 0)
             {
@@ -403,6 +413,7 @@ void listening_loop ()
 
               // search for task that was being executed by the monitor that just finished
               int finished_task_index;
+              task_cleanup:
               for (finished_task_index = 0; finished_task_index < GLOBAL_MAX_PARALLEL_TASKS; ++finished_task_index)
                 if (g.active_tasks[finished_task_index] != NULL
                     && g.active_tasks[finished_task_index]->monitor == monitor_pid)
