@@ -152,6 +152,23 @@ task_t *monitor_run_task (task_t *task)
 
   pipe_progs (task);
 
+  /**
+   * Semantics is important. Notice the purpose of the two functions:
+   *
+   * 1. `open`: Open a file for reading or writing
+   * 2. `stat`: Get file status, returns information about a file
+   *
+   * Furthermore,
+   *
+   * """
+   * A call to `open()` creates a new open file description, an entry in
+   * the system-wide table of open files.
+   * """ (https://man7.org/linux/man-pages/man2/open.2.html)
+   *
+   * Using lseek(fd,0,SEEK_END) to obtain the file size is a trick that can be avoided
+   * with the more appropriate function `stat`.
+   */
+
   struct stat st;
 
   stat (task->src, &st);
