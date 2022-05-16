@@ -32,7 +32,7 @@ add_custom_command(
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 endforeach()
-configure_file(${TEST_FILES} ${CMAKE_BINARY_DIR}/ COPYONLY)
+
 add_custom_target(
         test1
         COMMAND konsole --noclose -e ./test_script.sh
