@@ -185,8 +185,13 @@ task_t *monitor_run_task (task_t *task)
   wwrite (client_fd, completed_message, completed_message_length);
   cclose (client_fd);
 
-  const char finished_task = FINISHED_TASK;
-  wwrite (g.server_fifo_wr, &finished_task, 1);
+  //const char finished_task = FINISHED_TASK;
+  //wwrite (g.server_fifo_wr, &finished_task, 1);
+  char buf[128];
+  const int nbytes = snprintf (buf,128,"%c%ld",FINISHED_TASK,(long)getpid());
+  wwrite (g.server_fifo_wr, buf, nbytes);
+
+  fprintf (stderr, "[%ld] monitor exiting\n", (long) getpid ());
 
   _exit (EXIT_SUCCESS);
 }
@@ -234,10 +239,18 @@ size_t get_status_str (char stat_message[BUFSIZ])
   return strlen (stat_message);
 }
 
+void decrement_active_transformations_count (const task_t *task)
+{
+  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
+    g.get_transformation_active_count[j] -= task->ops_totals[j];
+}
+
+
 /*!
- * task_message ::= ⟨proc_file⟩ | ⟨status⟩
+ * task_message ::= ⟨proc_file⟩ | ⟨status⟩ | ⟨finished_taks⟩
  *      ⟨proc_file⟩ ::= ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
  *      ⟨status⟩    ::= ⟨client_pid_str⟩ ⟨STATUS⟩
+ *      ⟨finished_taks⟩ ::= ⟨FINISHED_TASK⟩ ⟨monitor_pid_str⟩
  *
  * ⟨num_ops⟩ ::= ⟨int⟩
  *
@@ -246,6 +259,23 @@ size_t get_status_str (char stat_message[BUFSIZ])
 void process_message (char *m)
 {
   fprintf (stderr, "[%ld] process_message: %s\n", (long) getpid (), m);
+
+  if (m[0] == FINISHED_TASK) {
+    fprintf (stderr, "[%ld] process_message: monitor\n", (long) getpid ());
+    pid_t monitor_pid = sstrtol (&m[1]);
+    // search for task that was being executed by the monitor that just finished
+    int finished_task_index;
+    for (finished_task_index = 0; finished_task_index < GLOBAL_MAX_PARALLEL_TASKS; ++finished_task_index)
+      if (g.active_tasks[finished_task_index] != NULL
+          && g.active_tasks[finished_task_index]->monitor == monitor_pid)
+        break;
+    assert (finished_task_index < GLOBAL_MAX_PARALLEL_TASKS);
+    decrement_active_transformations_count (g.active_tasks[finished_task_index]);
+    free_task (g.active_tasks[finished_task_index]);
+    g.active_tasks[finished_task_index] = NULL;
+    --g.num_active_tasks;
+    return;
+  }
 
   const char del[2] = "\31";
   char *tok;
@@ -347,8 +377,6 @@ void block_read_fifo ()
   if (g.has_been_interrupted)
     return;
   assert(nbytes > 0 && nbytes < BUFSIZ);
-  if (buf[0] == FINISHED_TASK)
-    return;
   fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
   for (size_t i = 0; i < nbytes;)
     {
@@ -356,12 +384,6 @@ void block_read_fifo ()
       process_message (&buf[i]);
       i += j;
     }
-}
-
-void decrement_active_transformations_count (const task_t *task)
-{
-  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-    g.get_transformation_active_count[j] -= task->ops_totals[j];
 }
 
 /*!
@@ -391,30 +413,6 @@ void listening_loop ()
 
       if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
-
-      // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
-      if (g.num_active_tasks > 0)
-        {
-          int monitor_pid, status;
-          fprintf (stderr, "[%ld] listening_loop: waiting for a task monitor\n", (long) getpid ());
-          while ((monitor_pid = waitpid (-1, &status, WNOHANG*(!g.has_been_interrupted))) > 0)
-            {
-              fprintf (stderr, "[%ld] listening_loop: monitor %d is finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), monitor_pid, WIFEXITED(status), WEXITSTATUS(status));
-
-              // search for task that was being executed by the monitor that just finished
-              int finished_task_index;
-              for (finished_task_index = 0; finished_task_index < GLOBAL_MAX_PARALLEL_TASKS; ++finished_task_index)
-                if (g.active_tasks[finished_task_index] != NULL
-                    && g.active_tasks[finished_task_index]->monitor == monitor_pid)
-                  break;
-              assert (finished_task_index < GLOBAL_MAX_PARALLEL_TASKS);
-              decrement_active_transformations_count (g.active_tasks[finished_task_index]);
-
-              free_task (g.active_tasks[finished_task_index]);
-              g.active_tasks[finished_task_index] = NULL;
-              --g.num_active_tasks;
-            }
-        }
 
       for (task_t *task = pqueue_peek (g.queue); task != NULL; task = pqueue_peek (g.queue))
         {
