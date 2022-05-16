@@ -440,7 +440,7 @@ int main (__attribute__((unused)) int argc, char *argv[])
   sigaction (SIGINT, &sa, NULL);
   sigaction (SIGTERM, &sa, NULL);
 
-  /**
+  /*
    * POSIX.1-1990 disallowed setting the action for SIGCHLD to
    * SIG_IGN.  POSIX.1-2001 and later allow this possibility, so that
    * ignoring SIGCHLD can be used to prevent the creation of zombies
