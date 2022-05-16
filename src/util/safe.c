@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/wait.h>
 
 #include "safe.h"
 
@@ -165,5 +166,15 @@ ssize_t ssendfile (int out_fd, int in_fd, off_t *offset, size_t count)
       fprintf (stderr, "WARNING: ssendfile got count=%ld but wrote %ld", count, r);
       _exit (EXIT_FAILURE);
     }
+  return r;
+}
+
+pid_t wwaitpid(pid_t pid, int *stat_loc, int options) {
+  pid_t r = waitpid (pid, stat_loc, options);
+  if (r < 0) {
+      perror ("wwaitpid");
+      if (errno != ECHILD)
+        _exit (EXIT_FAILURE);
+  }
   return r;
 }

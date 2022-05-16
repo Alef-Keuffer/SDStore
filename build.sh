@@ -13,7 +13,7 @@
 # Subshell, same as above.
 
 # If IDE cmake is working, this step may be skipped.
-cmake --build ./build --config Release --target all -j 18 --
+#cmake --build ./build --config Release --target all -j 18 --
 
 rm -f tests/server
 rm -f tests/client

@@ -1,7 +1,5 @@
 name: impossible
 
-# Resultado esperado: que o servidor recuse o pedido por exceder os
-# limites de concorrência para o comando gcompress.
 windows:
   - priority:
       panes:

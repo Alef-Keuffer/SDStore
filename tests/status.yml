@@ -1,22 +1,9 @@
 name: status
 
-# # Resultado esperado: que o servidor mostre a segunte informação.
-# [...] Message sent to 'SERVER'
-# Number of active tasks: 2
-# task [pid=...]: proc-file 1 filein1 fileout1 nop nop bcompress encrypt decrypt bdecompress
-# task [pid=...]: proc-file 1 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress
-# transf nop: 2/6 (running/max)
-# transf bcompress: 2/4 (running/max)
-# transf bdecompress: 2/4 (running/max)
-# transf encrypt: 2/3 (running/max)
-# transf decrypt: 2/3 (running/max)
-# transf gcompress: 1/2 (running/max)
-# transf gdecompress: 1/2 (running/max)
-# [...] Unlinked ...
 windows:
   - priority:
       panes:
         - ./server sdstored.conf bin/
         - sleep 1; ./client proc-file 1 filein1 fileout1 nop nop bcompress encrypt decrypt bdecompress
         - sleep 1; ./client proc-file 1 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress
-        - sleep 2; ./client status
+        - sleep 3; ./client status
