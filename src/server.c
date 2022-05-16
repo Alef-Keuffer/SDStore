@@ -244,7 +244,7 @@ void decrement_active_transformations_count (const task_t *task)
 
 
 /*!
- * task_message ::= ⟨proc_file⟩ | ⟨status⟩ | ⟨finished_taks⟩
+ * task_message ::= ⟨proc_file⟩ | ⟨status⟩ | ⟨finished_task⟩
  *      ⟨proc_file⟩ ::= ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
  *      ⟨status⟩    ::= ⟨client_pid_str⟩ ⟨STATUS⟩
  *      ⟨finished_taks⟩ ::= ⟨FINISHED_TASK⟩ ⟨monitor_pid_str⟩
