@@ -31,9 +31,6 @@ add_custom_command(
         COMMAND doxygen Doxyfile
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
-add_custom_command(TARGET ${target} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy ${f} ${TEST_FILES} ${CMAKE_CURRENT_BINARY_DIR}
-)
 endforeach()
 
 add_custom_target(

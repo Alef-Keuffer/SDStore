@@ -144,8 +144,7 @@ task_t *monitor_run_task (task_t *task)
   }
 
   /* Without these ignore when, for example, ctrl-c is pressed in terminal
-   * all child exec processes are terminated.
-   */
+   * all child exec processes are terminated. */
   signal (SIGINT, SIG_IGN);
   signal (SIGTERM, SIG_IGN);
 
@@ -185,8 +184,10 @@ task_t *monitor_run_task (task_t *task)
   wwrite (client_fd, completed_message, completed_message_length);
   cclose (client_fd);
 
-  const char finished_task = FINISHED_TASK;
-  wwrite (g.server_fifo_wr, &finished_task, 1);
+  char buf[128];
+  const int nbytes = snprintf (buf, 128, "%c%ld", FINISHED_TASK, (long) getpid ());
+  wwrite (g.server_fifo_wr, buf, nbytes + 1);
+  fprintf (stderr, "[%ld] monitor exiting\n", (long) getpid ());
 
   _exit (EXIT_SUCCESS);
 }
@@ -234,10 +235,17 @@ size_t get_status_str (char stat_message[BUFSIZ])
   return strlen (stat_message);
 }
 
+void decrement_active_transformations_count (const task_t *task)
+{
+  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
+    g.get_transformation_active_count[j] -= task->ops_totals[j];
+}
+
 /*!
- * task_message ::= ⟨proc_file⟩ | ⟨status⟩
+ * task_message ::= ⟨proc_file⟩ | ⟨status⟩ | ⟨finished_task⟩
  *      ⟨proc_file⟩ ::= ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
  *      ⟨status⟩    ::= ⟨client_pid_str⟩ ⟨STATUS⟩
+ *      ⟨finished_taks⟩ ::= ⟨FINISHED_TASK⟩ ⟨monitor_pid_str⟩
  *
  * ⟨num_ops⟩ ::= ⟨int⟩
  *
@@ -246,6 +254,24 @@ size_t get_status_str (char stat_message[BUFSIZ])
 void process_message (char *m)
 {
   fprintf (stderr, "[%ld] process_message: %s\n", (long) getpid (), m);
+
+  if (m[0] == FINISHED_TASK)
+    {
+      fprintf (stderr, "[%ld] process_message: finished_task\n", (long) getpid ());
+      pid_t monitor_pid = sstrtol (&m[1]);
+      // search for task that was being executed by the monitor that just finished
+      int finished_task_index;
+      for (finished_task_index = 0; finished_task_index < GLOBAL_MAX_PARALLEL_TASKS; ++finished_task_index)
+        if (g.active_tasks[finished_task_index] != NULL
+            && g.active_tasks[finished_task_index]->monitor == monitor_pid)
+          break;
+      assert (finished_task_index < GLOBAL_MAX_PARALLEL_TASKS);
+      decrement_active_transformations_count (g.active_tasks[finished_task_index]);
+      free_task (g.active_tasks[finished_task_index]);
+      g.active_tasks[finished_task_index] = NULL;
+      --g.num_active_tasks;
+      return;
+    }
 
   const char del[2] = "\31";
   char *tok;
@@ -333,10 +359,12 @@ void process_message (char *m)
 }
 
 void sig_handler (__attribute__((unused)) int signum)
-{ unlink (SERVER);
-  g.has_been_interrupted = 1; }
+{
+  unlink (SERVER);
+  g.has_been_interrupted = 1;
+}
 
-pid_t block_read_fifo ()
+void block_read_fifo ()
 {
   char buf[BUFSIZ];
   // assume client requests will not fill pipe buffer
@@ -345,28 +373,15 @@ pid_t block_read_fifo ()
   size_t nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
   fprintf (stderr, "[%ld] unblocked from fifo read\n", (long) getpid ());
   if (g.has_been_interrupted)
-    return -1;
+    return;
   assert(nbytes > 0 && nbytes < BUFSIZ);
-  if (buf[0] == FINISHED_TASK) {
-    int pid, st;
-    pid = waitpid(-1, &st, 0);
-    return pid;
-  }
-
-  fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
+  fprintf (stderr, "[%ld] block_read: read(s=%zu) %.*s\n", (long) getpid (), nbytes, (unsigned int) nbytes, buf);
   for (size_t i = 0; i < nbytes;)
     {
       size_t j = strlen (&buf[i]) + 1;
       process_message (&buf[i]);
       i += j;
     }
-    return -1;
-}
-
-void decrement_active_transformations_count (const task_t *task)
-{
-  for (int j = 0; j < NUMBER_OF_TRANSFORMATIONS; ++j)
-    g.get_transformation_active_count[j] -= task->ops_totals[j];
 }
 
 /*!
@@ -391,41 +406,11 @@ void listening_loop ()
 
   while (1)
     {
-      int monitor_pid;
-      if (!g.has_been_interrupted) {
-        monitor_pid = block_read_fifo ();
-        if (monitor_pid != -1) {
-          goto task_cleanup;
-        }
-      }
+      if (!g.has_been_interrupted)
+        block_read_fifo ();
 
       if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
-
-      // {runningLimit ∨ queueIsEmpty ⟹ cannot execute new tasks}
-      if (g.num_active_tasks > 0)
-        {
-          int status;
-          fprintf (stderr, "[%ld] listening_loop: waiting for a task monitor\n", (long) getpid ());
-          while ((monitor_pid = waitpid (-1, &status, WNOHANG*(!g.has_been_interrupted))) > 0)
-            {
-              fprintf (stderr, "[%ld] listening_loop: monitor %d is finished; WIFEXITED: %d; WEXITSTATUS: %d\n", (long) getpid (), monitor_pid, WIFEXITED(status), WEXITSTATUS(status));
-
-              // search for task that was being executed by the monitor that just finished
-              int finished_task_index;
-              task_cleanup:
-              for (finished_task_index = 0; finished_task_index < GLOBAL_MAX_PARALLEL_TASKS; ++finished_task_index)
-                if (g.active_tasks[finished_task_index] != NULL
-                    && g.active_tasks[finished_task_index]->monitor == monitor_pid)
-                  break;
-              assert (finished_task_index < GLOBAL_MAX_PARALLEL_TASKS);
-              decrement_active_transformations_count (g.active_tasks[finished_task_index]);
-
-              free_task (g.active_tasks[finished_task_index]);
-              g.active_tasks[finished_task_index] = NULL;
-              --g.num_active_tasks;
-            }
-        }
 
       for (task_t *task = pqueue_peek (g.queue); task != NULL; task = pqueue_peek (g.queue))
         {
@@ -442,6 +427,9 @@ void listening_loop ()
     }
 }
 
+void sig_child (__attribute__((unused)) int signum)
+{ wwaitpid (-1, NULL, 0); }
+
 int main (__attribute__((unused)) int argc, char *argv[])
 {
   struct sigaction sa;
@@ -451,6 +439,18 @@ int main (__attribute__((unused)) int argc, char *argv[])
 
   sigaction (SIGINT, &sa, NULL);
   sigaction (SIGTERM, &sa, NULL);
+
+  /**
+   * POSIX.1-1990 disallowed setting the action for SIGCHLD to
+   * SIG_IGN.  POSIX.1-2001 and later allow this possibility, so that
+   * ignoring SIGCHLD can be used to prevent the creation of zombies
+   * (see wait(2)).  Nevertheless, the historical BSD and System V
+   * behaviors for ignoring SIGCHLD differ, so that the only
+   * completely portable method of ensuring that terminated children
+   * do not become zombies is to catch the SIGCHLD signal and perform
+   * a wait(2) or similar. (https://man7.org/linux/man-pages/man2/sigaction.2.html)
+   */
+  signal (SIGCHLD, sig_child);
 
   fprintf (stderr, "[%ld] loading config...\n\n", (long) getpid ());
   char buf[BUFSIZ];
