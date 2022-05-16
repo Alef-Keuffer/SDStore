@@ -185,12 +185,9 @@ task_t *monitor_run_task (task_t *task)
   wwrite (client_fd, completed_message, completed_message_length);
   cclose (client_fd);
 
-  //const char finished_task = FINISHED_TASK;
-  //wwrite (g.server_fifo_wr, &finished_task, 1);
   char buf[128];
   const int nbytes = snprintf (buf,128,"%c%ld",FINISHED_TASK,(long)getpid());
-  wwrite (g.server_fifo_wr, buf, nbytes);
-
+  wwrite (g.server_fifo_wr, buf, nbytes + 1);
   fprintf (stderr, "[%ld] monitor exiting\n", (long) getpid ());
 
   _exit (EXIT_SUCCESS);
@@ -261,7 +258,7 @@ void process_message (char *m)
   fprintf (stderr, "[%ld] process_message: %s\n", (long) getpid (), m);
 
   if (m[0] == FINISHED_TASK) {
-    fprintf (stderr, "[%ld] process_message: monitor\n", (long) getpid ());
+    fprintf (stderr, "[%ld] process_message: finished_task\n", (long) getpid ());
     pid_t monitor_pid = sstrtol (&m[1]);
     // search for task that was being executed by the monitor that just finished
     int finished_task_index;
@@ -377,7 +374,7 @@ void block_read_fifo ()
   if (g.has_been_interrupted)
     return;
   assert(nbytes > 0 && nbytes < BUFSIZ);
-  fprintf (stderr, "[%ld] block_read: read %s\n", (long) getpid (), buf);
+  fprintf (stderr, "[%ld] block_read: read(s=%zu) %.*s\n", (long) getpid (), nbytes, nbytes, buf);
   for (size_t i = 0; i < nbytes;)
     {
       size_t j = strlen (&buf[i]) + 1;
