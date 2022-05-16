@@ -107,7 +107,7 @@ int ppipe (int *pipedes)
 }
 
 /*!
- * Does NOT exit on EINTR
+ * WARNING: Does NOT exit on EINTR. Returns 0 on EINTR.
  */
 size_t rread (int fd, void *buf, size_t nbytes)
 {
@@ -117,6 +117,8 @@ size_t rread (int fd, void *buf, size_t nbytes)
       perror ("rread");
       if (errno != EINTR)
         _exit (EXIT_FAILURE);
+      if (errno == EINTR)
+        return 0;
     }
   return r;
 }

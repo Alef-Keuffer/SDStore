@@ -372,9 +372,9 @@ void block_read_fifo ()
   fprintf (stderr, "[%ld] will block on fifo read\n", (long) getpid ());
   size_t nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
   fprintf (stderr, "[%ld] unblocked from fifo read\n", (long) getpid ());
-  if (g.has_been_interrupted)
-    return;
-  assert(nbytes > 0 && nbytes < BUFSIZ);
+  if (!g.has_been_interrupted)
+    assert(nbytes > 0);
+  assert(nbytes < BUFSIZ);
   fprintf (stderr, "[%ld] block_read: read(s=%zu) %.*s\n", (long) getpid (), nbytes, (unsigned int) nbytes, buf);
   for (size_t i = 0; i < nbytes;)
     {
@@ -406,8 +406,8 @@ void listening_loop ()
 
   while (1)
     {
-      if (!g.has_been_interrupted)
-        block_read_fifo ();
+      fprintf (stderr, "[%ld] looping in listening_loop\n", (long) getpid ());
+      block_read_fifo ();
 
       if (g.has_been_interrupted && queue_is_empty () && g.num_active_tasks == 0)
         break;
@@ -499,19 +499,22 @@ int main (__attribute__((unused)) int argc, char *argv[])
   fprintf (stderr, "[%ld] Created fifo %s\n", (long) getpid (), SERVER);
 
   g.server_fifo_rd = oopen (SERVER, O_RDONLY);
+  fprintf (stderr, "[%ld] Opened fifo %s for read\n", (long) getpid (), SERVER);
   if (g.has_been_interrupted)
-    {
-      unlink (SERVER);
       _exit (EXIT_SUCCESS);
-    }
+
   /* Opening for write only happens after first client writes to pipe
    * since the command above blocks until someone opens pipe for writing */
   g.server_fifo_wr = oopen (SERVER, O_WRONLY);
+  fprintf (stderr, "[%ld] Opened fifo %s for write\n", (long) getpid (), SERVER);
 
   listening_loop ();
+  fprintf(stderr,"[%ld] Exited listening_loop\n", (long) getpid ());
 
   cclose (g.server_fifo_rd);
+  fprintf(stderr,"[%ld] Closed g.server_fifo_rd\n", (long) getpid ());
   cclose (g.server_fifo_wr);
+  fprintf(stderr,"[%ld] Closed g.server_fifo_wr\n", (long) getpid ());
 
   unlink (SERVER);
   fprintf (stderr, "[%ld] Unlinked server fifo\n", (long) getpid ());
