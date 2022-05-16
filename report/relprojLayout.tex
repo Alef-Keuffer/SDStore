@@ -22,6 +22,10 @@
 
 \usepackage[pdftex]{hyperref} % transformar as referências internas do seu documento em hiper-ligações.
 
+% Para autómatos
+\usepackage{tikz}
+\usetikzlibrary{arrows,positioning}
+
 %Exemplos de fontes -- nao e vulgar mudar o tipo de fonte
 %\usepackage{tgbonum} % Fonte de letra: TEX Gyre Bonum
 %\usepackage{lmodern} % Fonte de letra: Latin Modern Sans Serif
@@ -130,9 +134,20 @@ Para mais informações sobre LATEX consultar o
  \href{http://www.ptep-online.com/ctan/lshort_port.pdf}{livro}.\\
 
 %Colocar url de um site
- Para mais informações sobre LATEX
- consultar o livro\footnote{acessível em \url{http://www.ptep-online.com/ctan/lshort_port.pdf}}.
+Para mais informações sobre LATEX
+consultar o livro\footnote{acessível em \url{http://www.ptep-online.com/ctan/lshort_port.pdf}}.
 
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=1.5cm,
+  main node/.style={thick,circle,draw,font=\sffamily\Large}]
+
+  \node[main node] (1) {$X_1$};
+  \node[main node] (2) [right=of 1]{$X_N$};
+  \node[main node] (3) [below=of 1]{C};
+
+  \path (1) edge (3);
+
+  \path (1) -- node[auto=false]{\ldots} (2);
+\end{tikzpicture}
 
 \section*{Estrutura do Relatório}
 explicar como está organizado o documento, referindo os capítulos existentes em~\cite{deransart:1990}

@@ -341,7 +341,7 @@ pid_t block_read_fifo ()
   char buf[BUFSIZ];
   // assume client requests will not fill pipe buffer
 
-  fprintf (stderr, "[%ld] will block on fifo read\n", (long) getpid ());
+  fprintf (stderr, "[%ld] will block on fifo read :joy:!\n", (long) getpid ());
   size_t nbytes = rread (g.server_fifo_rd, buf, BUFSIZ);
   fprintf (stderr, "[%ld] unblocked from fifo read\n", (long) getpid ());
   if (g.has_been_interrupted)
