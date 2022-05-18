@@ -22,6 +22,10 @@
 
 \usepackage[pdftex]{hyperref} % transformar as referências internas do seu documento em hiper-ligações.
 
+% Para autómatos
+\usepackage{tikz}
+\usetikzlibrary{automata,arrows,positioning}
+
 %Exemplos de fontes -- nao e vulgar mudar o tipo de fonte
 %\usepackage{tgbonum} % Fonte de letra: TEX Gyre Bonum
 %\usepackage{lmodern} % Fonte de letra: Latin Modern Sans Serif
@@ -129,10 +133,42 @@ A estrutura do relatório será a seguinte:
 Para mais informações sobre LATEX consultar o
  \href{http://www.ptep-online.com/ctan/lshort_port.pdf}{livro}.\\
 
-%Colocar url de um site
- Para mais informações sobre LATEX
- consultar o livro\footnote{acessível em \url{http://www.ptep-online.com/ctan/lshort_port.pdf}}.
+\begin{figure}
+\centering
+\begin{tikzpicture}[shorten >=1pt,node distance=4cm,on grid,auto]
 
+  \node[state] (C1) {Client$_1$};
+  \node[state] (C2) [right=of C1]{Client$_2$};
+  \node[state] (Cn) [right=of C2]{Client$_n$};
+  \node[state] (GlobFifo) [below=of C2]{Global FIFO};
+  \node[state] (Srv) [below=of GlobFifo]{Server};
+  \node[state] (M2) [below=of Srv]{Monitor$_2$};
+  \node[state] (M1) [left=of M2]{Monitor$_1$};
+  \node[state] (Mn) [right=of M2]{Monitor$_n$};
+
+  \path[->]
+    (C1) edge node {$write(t_1)$} (GlobFifo)
+    (C2) edge node {$write(t_2)$} (GlobFifo)
+    (Cn) edge node {$write(t_n)$} (GlobFifo)
+    (GlobFifo) edge node {$read()$} (Srv)
+    (M1) edge node {$write(t_1)$} (GlobFifo)
+    (M2) edge node {$write(t_2)$} (GlobFifo)
+    (Mn) edge node {$write(t_n)$} (GlobFifo)
+
+
+    (C2) -- node[auto=false]{\ldots} (Cn);
+    (M2) -- node[auto=false]{\ldots} (Mn);
+
+
+\end{tikzpicture}
+\caption{Arquitetura da aplicação}
+\end{figure}
+
+\newpage
+
+%Colocar url de um site
+Para mais informações sobre LATEX
+consultar o livro\footnote{acessível em \url{http://www.ptep-online.com/ctan/lshort_port.pdf}}.
 
 \section*{Estrutura do Relatório}
 explicar como está organizado o documento, referindo os capítulos existentes em~\cite{deransart:1990}
