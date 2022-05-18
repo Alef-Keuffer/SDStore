@@ -7,8 +7,6 @@ cmake-build-dir/**
 cmake-build-debug/bin/**
 build/**
 
-docs/**
-
 tests/file*
 tests/bin/**
 tests/sdstored.conf
