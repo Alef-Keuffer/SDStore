@@ -1,4 +1,4 @@
-@startuml myimage.svg
+@startuml useExample1.svg
 skinparam Shadowing false
 skinparam defaultFontName monospace
 

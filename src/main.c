@@ -3,7 +3,7 @@
 
 @mainpage Example use
 
-@startuml{myimage.svg} "Example use" width=5cm
+@startuml{useExample1.svg} "Example use" width=5cm
 
 skinparam Shadowing false
 skinparam defaultFontName monospace
