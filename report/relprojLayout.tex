@@ -24,7 +24,11 @@
 
 % Para autómatos
 \usepackage{tikz}
-\usetikzlibrary{automata,arrows,positioning}
+\usetikzlibrary{automata,arrows,positioning, arrows.meta, shapes.geometric}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{pdfpages}
+\usepackage{float} % Image location specifier
 
 %Exemplos de fontes -- nao e vulgar mudar o tipo de fonte
 %\usepackage{tgbonum} % Fonte de letra: TEX Gyre Bonum
@@ -85,8 +89,6 @@
 
 % comando '\def' usado para definir abreviatura (macros)
 % o primeiro argumento é o nome do novo comando e o segundo entre chavetas é o texto original, ou sequência de controle, para que expande
-\def\darius{\textsf{Darius}\xspace}
-\def\antlr{\texttt{AnTLR}\xspace}
 \def\so{\emph{Sistemas Operativos}\xspace}
 \def\titulo#1{\section{#1}}    %no corpo do documento usa-se na forma '\titulo{MEU TITULO}'
 \def\area#1{{\em \'{A}rea: #1}\\[0.2cm]}
@@ -114,71 +116,220 @@ práticos desenvolvidos nas UC de \so.
 \end{abstract}
 
 \tableofcontents % Insere a tabela de indice
-%\listoffigures % Insere a tabela de indice figuras
+\listoffigures % Insere a tabela de indice figuras
 %\listoftables % Insere a tabela de indice tabelas
 
 \chapter{Introdução} \label{chap:intro} %referência cruzada
 
-A estrutura do relatório será a seguinte:
+Este relatório contém a descrição do projeto realizado pelo Grupo 20 para
+o Trabalho Prático de Sistemas Operativos, para o ano letivo de 2021/2022.
 
-\begin{description}  % Item com descrição
-  \item[Problema] o problema que se quer resolver e o objetivo do projeto
-  \item[Descrição] da solução implementada, e das decisões tomadas
-  \item[] 
-  \item[Estrutura do documento] o que é abordado em cada capitulo.
-\end{description}
 
+\section*{Estrutura do Relatório}
+
+A estrutura do relatório é a seguinte:
+\begin{itemize}
+\item No capítulo~\ref{chap:analysis} faz-se uma análise do comportamento dos
+  programas cliente e servidor desenvolvidos para a aplicação SDStore.
+
+\item No capítulo~ explicam-se alguns aspetos mais técnicos e concretos da implementação.
+
+\item No capítulo~\ref{concl} termina-se o relatório com as conclusões e o trabalho futuro.
+\end{itemize}
 
 % colocar omitido um url de um site ou de um documento
 Para mais informações sobre LATEX consultar o
- \href{http://www.ptep-online.com/ctan/lshort_port.pdf}{livro}.\\
+ \href{http://www.ptep-online.com/ctan/lshort_port.pdf}{livro}.
+
+\chapter{Arquitetura da aplicação} \label{chap:analysis} %referência cruzada
+
+\begin{figure}
+  \centering
+  \includepdf[scale=0.66]{useExample1}
+  \caption{Interação entre Cliente e Servidor via terminal}
+\end{figure}
+
+\newpage
+
+\section{Notas sobre Cliente, Servidor}
+
+\begin{itemize}
+  \item Servidor:
+  \begin{itemize}
+    \item O servidor lê um ficheiro de configuração igual àquele descrito no enunciado,
+    cuja informação ditará os limites de concorrência para cada transformação que pode correr.
+    \item O servidor também precisa receber como argumento a pasta onde se encontram
+    os programas que efetuam as transformações. Ou seja, como pedia o enunciado:
+    \texttt{./server etc/sdstored.conf bin/sdstore-transformations}.
+    \item A única forma de parar o servidor é enviar \texttt{SIGINT} ou \texttt{SIGTERM},
+    o que não terminará quaisquer processos em curso, ou que já tenham sido submetidos por clientes.
+  \end{itemize}
+
+  \item Cliente:
+  \begin{itemize}
+    \item A aplicação é composta por dois executáveis, \texttt{server} e \texttt{client}
+    (que correspondem a \texttt{sdstore} e \texttt{sdstored}, resp.).
+    \item Tal como pedido no enunciado, o cliente pode submeter pedidos de transformação
+    de ficheiros, com uma prioridade associada. A prioridade pode ser qualquer não negativo.
+    \item O cliente também pode, através do comando \texttt{./client status}, ver quais são as
+    transformações atualmente em curso, e quais os limites de concorrência do servidor.
+  \end{itemize}
+\end{itemize}
+
+\section{Comunicação entre Servidor e Cliente}
+
+\begin{itemize}
+  \item Servidor e clientes comunicam entre si através de \texttt{mkfifo()}s.
+  \item Existe um só FIFO para comunicação de todos os clientes para o servidor, chamado
+  \texttt{SERVER}
+  \item Cada cliente envia o seu PID em cada pedido que faz, porque:
+  \item Cada cliente tem um FIFO próprio para receber informação relativa ao seu pedido, identificado
+  pelo seu PID.
+
+  \item \textbf{Cada cliente}, ao comunicar com o servidor, cria uma estrutura de dados~\ref{code:task_struct}
+  com a informação relativa ao pedido (ou só \texttt{status} se for esse o caso), que depois envia ao servidor.\\
+  O protocolo de comunicação entre cliente e servidor pode ser aproximado pela seguinte gramática:
+
+\begin{align*}
+  task\_message &::= \langle proc\_file \rangle\ |\ \langle status \rangle\ |\ \langle finished\_task \rangle \\
+  \langle proc\_file \rangle &::= \langle client\_pid\_str \rangle \ \text{PROC\_FILE} \ \langle priority \rangle \langle src \rangle \langle dst \rangle \langle num\_ops \rangle \langle ops \rangle^+\\
+  \langle status \rangle    &::= \langle client\_pid\_str \rangle \text{STATUS} \\
+  \langle finished\_task \rangle &::= \text{FINISHED\_TASK} \langle monitor\_pid\_str \rangle \\
+  \langle num\_ops \rangle &::= \langle int \rangle
+\end{align*}
+\label{text:protocol}
+
+  \item O servidor não executa os pedidos que recebe dos clientes.\\
+  Cria um \textbf{Monitor} por cada uma delas, que depois fica responsável por notificar o
+  cliente e o servidor da sua terminação\label{text:monitor}. Ver imagem~\ref{fig:architecture}.
+
+\end{itemize}
+
+
+\newpage
 
 \begin{figure}
 \centering
-\begin{tikzpicture}[shorten >=1pt,node distance=4cm,on grid,auto]
+\begin{tikzpicture}[shorten >=1pt,node distance=4cm,on grid, auto, initial text = ]
 
-  \node[state] (C1) {Client$_1$};
-  \node[state] (C2) [right=of C1]{Client$_2$};
-  \node[state] (Cn) [right=of C2]{Client$_n$};
+  \node[state, initial] (C2) {Client$_2$};
+  \node[state, initial] (Cn) [right=of C2]{Client$_n$};
+  \node[state, initial] (C1) [left=of C2]{Client$_1$};
+  
   \node[state] (GlobFifo) [below=of C2]{Global FIFO};
-  \node[state] (Srv) [below=of GlobFifo]{Server};
+  \node[state, initial] (Srv) [below=of GlobFifo]{Server};
   \node[state] (M2) [below=of Srv]{Monitor$_2$};
   \node[state] (M1) [left=of M2]{Monitor$_1$};
   \node[state] (Mn) [right=of M2]{Monitor$_n$};
+  \node[rectangle,draw] (PQ) [right=of Srv]{PQueue};
 
   \path[->]
     (C1) edge node {$write(t_1)$} (GlobFifo)
     (C2) edge node {$write(t_2)$} (GlobFifo)
     (Cn) edge node {$write(t_n)$} (GlobFifo)
-    (GlobFifo) edge node {$read()$} (Srv)
-    (M1) edge node {$write(t_1)$} (GlobFifo)
-    (M2) edge node {$write(t_2)$} (GlobFifo)
-    (Mn) edge node {$write(t_n)$} (GlobFifo)
+    (Srv) edge node {$read(t_k)$} (GlobFifo)
+    (Srv) edge node[above] {$spawn(t_1)$} (M1)
+          edge node {$spawn(t_2)$} (M2)
+          edge node {$spawn(t_n)$} (Mn)
+          edge [bend left] node {$pq\_insert(t_k)$} (PQ)
 
+    (PQ) edge node {$t_j = pq\_pop()$} (Srv)
 
     (C2) -- node[auto=false]{\ldots} (Cn);
+
+  \path
     (M2) -- node[auto=false]{\ldots} (Mn);
 
 
 \end{tikzpicture}
-\caption{Arquitetura da aplicação}
+\caption{Arquitetura global da aplicação}
+\label{fig:architecture}
 \end{figure}
+
+Na figura \ref{fig:architecture}, vê-se uma especificação informal do funcionamento global
+da aplicação.
+
+\begin{itemize}
+  \item Vários clientes podem comunicar em simultâneo com o servidor
+  \item O servidor lê os pedidos do FIFO, insere-os na sua "\textit{priority queue}", e depois,
+  de acordo com a sua lógica interna para controlar os limites de concorrência, cria monitores para as próximas
+  tarefas, que ficam responsáveis pela "\textit{pipeline}" de transformações.
+  \item São os monitores que comunicam ao cliente a conclusão da tarefa, como referido
+  anteriormente~\ref{text:monitor}, assim como ao servidor, através de uma escrita no FIFO global de uma
+  mensagem especial \texttt{FINISHED\_TASK}~\ref{text:protocol}.\\
+  A figura seguinte ilustra melhor o funcionamento dos monitores.
+
+\end{itemize}
 
 \newpage
 
-%Colocar url de um site
-Para mais informações sobre LATEX
-consultar o livro\footnote{acessível em \url{http://www.ptep-online.com/ctan/lshort_port.pdf}}.
+\begin{figure}
+  \centering  
+\begin{tikzpicture}[shorten >=1pt,node distance=4cm,on grid,auto, initial text = ]
 
-\section*{Estrutura do Relatório}
-explicar como está organizado o documento, referindo os capítulos existentes em~\cite{deransart:1990}
-e a sua articulação explicando o conteúdo de cada um.
-No capítulo~\ref{chap:analiseEspecificacao} faz-se uma análise detalhada do problema proposto
-de modo a poder-se especificar  as entradas, resultados e formas de transformação.\\
-etc. \ldots\\ % reticencias
-No capítulo~\ref{concl} termina-se o relatório com uma síntese do que foi dito,
-as conclusões e o trabalho futuro
+  \node[state] (E12) {E$_{1,2}$};
+  \node[state] (E11) [left=2cm of E12]{E$_{1,1}$};
+  \node[state] (E1i) [right=2cm of E12]{E$_{1,i}$};
 
+  \node[state, initial] (Mj)[below=of E12] {Monitor$_j$};
+
+  \node[state] (GlobFifo) [below=of Mj]{Global FIFO};
+  \node[state] (ClFifo) [right=6cm of Mj]{Client$_j$Fifo};
+  \node[state] (Srv) [left=6cm of GlobFifo]{Server};
+  \node[state] (Cj) [right=6cm of GlobFifo]{Client$_j$};
+
+  \path[->]
+    (Cj) edge node[pos=0.7] {$read("completed")$} (ClFifo)
+    (Cj) edge node[right, pos=0.3] {$read("in = \ldots,\ out = \ldots")$} (ClFifo)
+    (Srv) edge node {$read(done(t_j))$} (GlobFifo)
+          edge [loop above] node {$update \ limits$} (Srv)
+    (Mj) edge node[left] {$write(done(t_j))$} (GlobFifo)
+         edge node {$pipe\_progs(t_j)$} (E11)
+         edge node {$"completed"$} (ClFifo)
+         edge node[below] {$"in = \ldots,\ out = \ldots"$} (ClFifo)
+    (E11) edge node {} (E12)
+    (E1i) edge node {execl()} (Mj);
+
+    \path
+    (E12) -- node[auto=false]{\ldots} (E1i);
+
+\end{tikzpicture}
+\caption{Relação entre Monitor, Cliente e Servidor}
+\end{figure}
+
+\begin{center}
+\noindent\rule{12cm}{0.4pt}
+\end{center}
+
+
+\section{Detalhes sobre o servidor}
+\begin{itemize}
+  \item O servidor faz, essencialmente, um ciclo \lstinline{while(1) read(fifo);}.
+  \item Durante o desenvolvimento do projeto, consideraram-se alternativas que fariam os monitores enviar
+  sinais ao servidor aquando do término da sua execução, para ser poder fazer \lstinline{waitpid(...)}, colher
+  o processo monitor, e libertar os filtros em uso.\\
+  \\
+  No entanto, optou-se contra esta solução devido aos problemas de não-determinismo envolvidos no tratamento de sinais
+  e.g. dois processos terminam exatamente ao mesmo tempo, só haverá um desses sinais na fila do servidor, só se fará
+  \lstinline{wait} uma vez, etc.
+  \item O servidor usa uma "\textit{priority queue}"\footnote{implementação disponível em \url{https://github.com/vy/libpqueue}}
+  para guardar os pedidos que lê do FIFO global
+  \item Após cada monitor terminar e escrever no FIFO global que já o fez, o servidor lê essa mensagem do FIFO
+  e atualiza depois os limites de concorrência de cada tipo de transformação.
+  \item O servidor obtém a próxima tarefa a executar através de \lstinline{pqueue_peek()}. Se a próxima tarefa
+  não puder ser executada, nunca se fazem esperas ativas: o servidor regressa à leitura do FIFO
+  (que, recorde-se, é bloqueante), para esperar ou por novos pedidos de clientes, ou por monitores que terminam.
+\end{itemize}
+
+A imagem seguinte tem mais detalhes sobre a lógica interna do servidor.
+
+\newpage
+
+\begin{figure}[H]
+  \centering
+  \includepdf[scale=0.5]{loopLogic}
+  \caption{Funcionamento interno do Servidor}
+\end{figure}
 
 
 \chapter{Análise e Especificação} \label{chap:analiseEspecificacao} %capitulo e referencia cruzada
@@ -206,21 +357,34 @@ Estado final do projecto; Análise crítica dos resultados~\cite{Sto77a}.\\
 Trabalho futuro.
 
 \appendix % apendice
-\chapter{Código do Programa}
+\chapter{Excertos de Código Utilizado no Projeto}
 
-Lista-se a seguir o CÓDIGO \antlr~\cite{antlr:2016} do programa
-\darius~\cite{maskin:1985} que foi desenvolvido.
-\begin{verbatim}
-public class Aula()
-  {
-    int n, m;
-    int max(int a, int b)
-      {
-       ......
-       return(max);
-      }
-  }
-\end{verbatim}
+
+\lstset{language=C++,
+  basicstyle=\small, % print whole listing small
+  keywordstyle=\color{pink}\bfseries\underbar,
+  % underlined bold black keywords
+  identifierstyle={\color{purple}},%
+  commentstyle=\color{red}, % brown comments
+  stringstyle=\color{blue}\ttfamily, % typewriter type for strings, blue 
+  showstringspaces=true
+}
+
+\label{code:task_struct}
+\begin{lstlisting}[caption={Estrutura para pedidos de processamento de ficheiros}]
+    typedef struct task_t {
+      size_t pos; //private
+      pqueue_pri_t pri;
+      char *client_pid_str;
+      char *src;
+      char *dst;
+      char *ops;
+      int num_ops;
+      pid_t monitor;
+      char ops_totals[NUMBER_OF_TRANSFORMATIONS];
+  } task_t;
+\end{lstlisting}
+
 
 Lista-se a seguir UM TEXTO (COM O COMANDO VERBATIN)
 \begin{verbatim}
