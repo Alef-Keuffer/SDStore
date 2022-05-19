@@ -132,7 +132,7 @@ A estrutura do relatório é a seguinte:
 \item No capítulo~\ref{chap:analysis} faz-se uma análise do comportamento dos
   programas cliente e servidor desenvolvidos para a aplicação SDStore.
 
-\item No capítulo~ explicam-se alguns aspetos mais técnicos e concretos da implementação.
+\item No capítulo~\ref{chap:servidor} explicam-se alguns aspetos mais técnicos e concretos da implementação.
 
 \item No capítulo~\ref{concl} termina-se o relatório com as conclusões e o trabalho futuro.
 \end{itemize}
@@ -294,17 +294,15 @@ da aplicação.
     (E12) -- node[auto=false]{\ldots} (E1i);
 
 \end{tikzpicture}
-\caption{Relação entre Monitor, Cliente e Servidor}
+\caption{Relação entre Monitores, Clientes e Servidor}
 \end{figure}
 
-\begin{center}
-\noindent\rule{12cm}{0.4pt}
-\end{center}
+{\let\clearpage\relax \chapter{Funcionamento do servidor} \label{chap:servidor} } %capitulo e referencia cruzada
 
-
-\section{Detalhes sobre o servidor}
 \begin{itemize}
   \item O servidor faz, essencialmente, um ciclo \lstinline{while(1) read(fifo);}.
+  \item O servidor guarda os pedidos em execução numa lista, e utiliza "\lstinline{arrays}" para armazenar
+  os limites de cada transformação, assim como o número de transformações em execução: ver anexo~\ref{code:server_struct}.
   \item Durante o desenvolvimento do projeto, consideraram-se alternativas que fariam os monitores enviar
   sinais ao servidor aquando do término da sua execução, para ser poder fazer \lstinline{waitpid(...)}, colher
   o processo monitor, e libertar os filtros em uso.\\
@@ -312,44 +310,96 @@ da aplicação.
   No entanto, optou-se contra esta solução devido aos problemas de não-determinismo envolvidos no tratamento de sinais
   e.g. dois processos terminam exatamente ao mesmo tempo, só haverá um desses sinais na fila do servidor, só se fará
   \lstinline{wait} uma vez, etc.
-  \item O servidor usa uma "\textit{priority queue}"\footnote{implementação disponível em \url{https://github.com/vy/libpqueue}}
-  para guardar os pedidos que lê do FIFO global
+  \item O servidor usa uma "\textit{priority queue}"\footnote{implementação disponível em \url{https://github.com/vy/libpqueue}}\label{footnote:pqueue}
+  para guardar os pedidos que lê do FIFO global.
   \item Após cada monitor terminar e escrever no FIFO global que já o fez, o servidor lê essa mensagem do FIFO
   e atualiza depois os limites de concorrência de cada tipo de transformação.
   \item O servidor obtém a próxima tarefa a executar através de \lstinline{pqueue_peek()}. Se a próxima tarefa
   não puder ser executada, nunca se fazem esperas ativas: o servidor regressa à leitura do FIFO
-  (que, recorde-se, é bloqueante), para esperar ou por novos pedidos de clientes, ou por monitores que terminam.
+  (que, recorde-se, é bloqueante), para esperar ou por novos pedidos de clientes, ou por monitores que terminam,
+  levando à atualização dos limites de concorrência.
 \end{itemize}
 
 A imagem seguinte tem mais detalhes sobre a lógica interna do servidor.
 
-\newpage
-
 \begin{figure}[H]
   \centering
-  \includepdf[scale=0.5]{loopLogic}
+  \includegraphics[scale=0.55]{loopLogic.png}
   \caption{Funcionamento interno do Servidor}
+  \label{fig:server}
 \end{figure}
 
+Note-se que na figura acima~\ref{fig:server}, as mensagens que o servidor processa
+correspondem ao protocolo definido em~\ref{text:protocol}:
+\begin{itemize}
+  \item \lstinline{status} para clientes que querem saber o estado do servidor
+  \item \lstinline{proc-file} para submeter pedidos de processamento
+  \item \lstinline{finished_task} para monitores que terminaram o pedido de um cliente.
+\end{itemize}
 
-\chapter{Análise e Especificação} \label{chap:analiseEspecificacao} %capitulo e referencia cruzada
-\section{Descrição informal do problema} \label{sec:descricaoProblema} %seccao e referencia cruzada
-\section{Especificação do Requisitos}
-\subsection{Dados} \label{subsec:dados} %subseccao e referencia cruzada
-\subsection{Pedidos}
-\subsection{Relações}
+\section{Funcionalidades Avançadas do Servidor}
 
-\chapter{Concepção/desenho da Resolução}
-\section{Estruturas de Dados}
-\section{Algoritmos}
+Foram pedidas 3 funcionalidades avançadas para o serviço, que se enumeram de seguida.
 
-\chapter{Codificação e Testes}
-\section{Alternativas, Decisões e Problemas de Implementação}
-\section{Testes realizados e Resultados}
-Mostram-se a seguir alguns testes feitos (valores introduzidos) e
-os respectivos resultados obtidos:
+\subsection{Tamanho de ficheiros de entrada/saída}
+Para o servidor (através dos monitores que atribui a cada tarefa) reportar
+o número de bytes lidos do ficheiro de \textit{input} e escritos no ficheiro de \textit{output},
+faz-se somente \lstinline{lseek(fd, 0, SEEK_END)} para cada ficheiro.
 
-%\VerbatimInput{teste1.txt}
+\subsection{Terminação graciosa de servidor}
+Para terminar de forma graciosa com \lstinline{SIGTERM/SIGQUIT}, executa-se, em cada processo monitor,
+o código \lstinline{signal (SIGINT, SIG_IGN); signal (SIGTERM, SIG_IGN);}.\\
+Caso contrário, \lstinline{CTRL^C} também os terminará \textemdash monitores são obtidos através de
+\lstinline{fork()} do servidor, herdando o seu tratamento de sinais. \textemdash.\\
+No servidor, faz-se
+
+\lstset{language=C,
+  basicstyle=\small, % print whole listing small
+  keywordstyle=\color{pink}\bfseries\underbar,
+  % underlined bold black keywords
+  identifierstyle={\color{purple}},%
+  commentstyle=\color{red}, % brown comments
+  stringstyle=\color{blue}\ttfamily, % typewriter type for strings, blue 
+  showstringspaces=true
+}
+
+\label{code:server_signal}
+\begin{lstlisting}[caption={Tratamento de sinais no servidor}]
+  void sig_handler (__attribute__((unused)) int signum) {
+      unlink (SERVER);
+      g.has_been_interrupted = 1;
+  }
+
+  struct sigaction sa;
+  sigemptyset (&sa.sa_mask);
+  sa.sa_handler = sig_handler;
+  sa.sa_flags = 0;
+
+  sigaction (SIGINT, &sa, NULL);
+  sigaction (SIGTERM, &sa, NULL);
+\end{lstlisting}
+
+O comando \lstinline{unlink(SERVER)} previnirá mais clientes de fazer novos pedidos para o FIFO global.
+
+\subsection{Prioridades de pedidos de processamento}
+
+Como referido anteriormente, usa-se uma implementação de "\textit{priority queues}"~\ref{footnote:pqueue} em C
+para decidir a ordem de execução dos pedidos.\\
+
+Note-se que pedidos com a mesma prioridade não têm distinção, e o processo de escolha é não-determinístico.
+
+\chapter{Testes realizados e Resultados} \label{chap:bash_testes} %capitulo e referencia cruzada
+
+Para testar a aplicação, utilizaram-se as seguintes ferramentas:
+
+\begin{itemize}
+  \item Tmux: \url{https://en.wikipedia.org/wiki/Tmux}
+  \item Tmuxinator: https://github.com/tmuxinator/tmuxinator
+\end{itemize}
+
+O Tmuxinator utiliza configurações YAML (ver exemplos em anexo) que especificam cenários
+de teste concretos, que depois podem ser executados através de scripts Bash que compilam
+o projeto, criam ficheiros de teste e depois executam os programas.
 
 \chapter{Conclusão} \label{concl}
 Síntese do Documento~\cite{araujo:2018,martini:2018}.\\
@@ -359,8 +409,7 @@ Trabalho futuro.
 \appendix % apendice
 \chapter{Excertos de Código Utilizado no Projeto}
 
-
-\lstset{language=C++,
+\lstset{language=C,
   basicstyle=\small, % print whole listing small
   keywordstyle=\color{pink}\bfseries\underbar,
   % underlined bold black keywords
@@ -385,19 +434,25 @@ Trabalho futuro.
   } task_t;
 \end{lstlisting}
 
-
-Lista-se a seguir UM TEXTO (COM O COMANDO VERBATIN)
-\begin{verbatim}
-      aqui deve aparecer o código do programa,
-      tal como está formato no ficheiro-fonte "darius.java"
-      um pouco de matematica $\$$
-      caso indesejável $\varepsilon$
-\end{verbatim}
-
-\begin{lstlisting}[caption={Exemplo de uma Listagem}, label={lstExe1}]
-      ou entao aparecer aqui neste sitio um pouco de matematica $\$$
-      como alternativa ao anterior.
-      e aqui mais um teste $\varepsilon$
+\label{code:server_struct}
+\begin{lstlisting}[caption={Amostra de Estrutura global do servidor}]
+  struct {
+    volatile sig_atomic_t has_been_interrupted;
+    const int max_parallel_task;
+    task_t *active_tasks[GLOBAL_MAX_PARALLEL_TASKS];
+    const char *TRANSFORMATIONS_FOLDER;
+    int server_fifo_rd;
+    int server_fifo_wr;
+    pqueue_t *queue;
+    int num_active_tasks;
+    int get_transformation_active_limit[NUMBER_OF_TRANSFORMATIONS];
+    int get_transformation_active_count[NUMBER_OF_TRANSFORMATIONS];
+  } g = {
+      .has_been_interrupted = 0,
+      .num_active_tasks = 0,
+      .get_transformation_active_count = {0},
+      .active_tasks = {NULL}
+  };
 \end{lstlisting}
 
 \newpage
