@@ -1,0 +1,63 @@
+@startuml useExample1.svg
+skinparam Shadowing false
+skinparam defaultFontName monospace
+
+actor User
+participant Client
+participant Server
+actor Admin
+
+activate User
+
+== Initialization ==
+activate Admin
+Admin -> Server: ./server ⟨configFilePath⟩ ⟨transformationsFolderPath⟩
+deactivate Admin
+activate Server
+
+== proc-file ==
+User -> Client: ./client proc-file ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨transformation⟩⁺
+activate Client
+Client -> Server: ⟨client_pid_str⟩ ⟨PROC_FILE⟩ ⟨priority⟩ ⟨src⟩ ⟨dst⟩ ⟨num_ops⟩ ⟨ops⟩⁺
+Server -> Client: pending
+Server -> Client: processing
+Server -> Client: finished + bytes read + bytes written
+deactivate Client
+
+== status ==
+User -> Client: ./client status
+activate Client
+Client -> Server: ⟨client_pid_str⟩ ⟨STATUS⟩
+Server -> Client: ⟨get_status_str()⟩
+deactivate Client
+
+== Termination ==
+
+Server <-? : SIGTERM or SIGINT
+deactivate Server
+@enduml
+@startuml loopLogic.svg
+hide empty description
+
+state "listening loop" as lloop {
+
+[*] --> fblock
+
+state "blocked on FIFO read" as fblock
+fblock --> pmes: has data
+state "process message" as pmes {
+    state status: *send status to client
+    state procfile as "proc-file": *proc-file\n*add task to queue\n*send "pending"
+    state finished_task : *update running info\n*(monitor already sent "completed")
+}
+
+state "process queue" as pqueue: *execute any tasks that are possible\n*send "processing" here
+
+pmes --> pqueue
+pqueue --> fblock
+
+fblock --> pqueue: interrupted
+}
+
+lloop --> [*]: hasBeenInterrupted\n&& queueIsEmpty\n&& hasNoActiveTasks
+@enduml

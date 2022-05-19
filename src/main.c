@@ -3,7 +3,7 @@
 
 @mainpage Example use
 
-@startuml{myimage.svg} "Example use" width=5cm
+@startuml{useExample1.svg} "Example use" width=5cm
 
 skinparam Shadowing false
 skinparam defaultFontName monospace
@@ -41,10 +41,35 @@ deactivate Client
 
 Server <-? : SIGTERM or SIGINT
 deactivate Server
-
-
 @enduml
- *
+
+---
+
+@startuml{loopLogic.svg} "Loop Logic" width=5cm
+hide empty description
+
+state "listening loop" as lloop {
+
+[*] --> fblock
+
+state "blocked on FIFO read" as fblock
+fblock --> pmes: has data
+state "process message" as pmes {
+    state status: *send status to client
+    state procfile as "proc-file": *proc-file\n*add task to queue\n*send "pending"
+    state finished_task : *update running info\n*(monitor already sent "completed")
+}
+
+state "process queue" as pqueue: *execute any tasks that are possible\n*send "processing" here
+
+pmes --> pqueue
+pqueue --> fblock
+
+fblock --> pqueue: interrupted
+}
+
+lloop --> [*]: hasBeenInterrupted\n&& queueIsEmpty\n&& hasNoActiveTasks
+@enduml
 */
 
 
