@@ -16,6 +16,7 @@
 %\usepackage{apalike} % gerar biliografia no estilo 'named' (apalike)
 
 \usepackage{color} % Para escrever em cores
+\usepackage{xcolor}
 
 \usepackage{multirow} %tabelas com multilinhas
 \usepackage{array} %formatação especial de tabelas em array
@@ -40,16 +41,7 @@
 
 \usepackage{listings}  % para utilizar blocos de texto verbatim no estilo 'listings'
 %paramerização mais vulgar dos blocos LISTING - GENERAL
-\lstset{
-	basicstyle=\small, %o tamanho das fontes que são usadas para o código
-	numbers=left, % onde colocar a numeração da linha
-	numberstyle=\tiny, %o tamanho das fontes que são usadas para a numeração da linha
-	numbersep=5pt, %distancia entre a numeração da linha e o codigo
-	breaklines=true, %define quebra automática de linha
-    frame=tB,  % caixa a volta do codigo
-	mathescape=true, %habilita o modo matemático
-	escapeinside={(*@}{@*)} % se escrever isto  aceita tudo o que esta dentro das marcas e nao altera
-}
+
 %
 %\lstset{ %
 %	language=Java,							% choose the language of the code
@@ -124,7 +116,6 @@ práticos desenvolvidos nas UC de \so.
 Este relatório contém a descrição do projeto realizado pelo Grupo 20 para
 o Trabalho Prático de Sistemas Operativos, para o ano letivo de 2021/2022.
 
-
 \section*{Estrutura do Relatório}
 
 A estrutura do relatório é a seguinte:
@@ -134,12 +125,10 @@ A estrutura do relatório é a seguinte:
 
 \item No capítulo~\ref{chap:servidor} explicam-se alguns aspetos mais técnicos e concretos da implementação.
 
+\item No capítulo~\ref{chap:bash_testes}, explica-se como compilar, executar e testar o projeto.
+
 \item No capítulo~\ref{concl} termina-se o relatório com as conclusões e o trabalho futuro.
 \end{itemize}
-
-% colocar omitido um url de um site ou de um documento
-Para mais informações sobre LATEX consultar o
- \href{http://www.ptep-online.com/ctan/lshort_port.pdf}{livro}.
 
 \chapter{Arquitetura da aplicação} \label{chap:analysis} %referência cruzada
 
@@ -154,6 +143,8 @@ Para mais informações sobre LATEX consultar o
 \section{Notas sobre Cliente, Servidor}
 
 \begin{itemize}
+  \item A aplicação é composta por dois executáveis, \texttt{server} e \texttt{client}
+  (que correspondem a \texttt{sdstore} e \texttt{sdstored}, resp.).
   \item Servidor:
   \begin{itemize}
     \item O servidor lê um ficheiro de configuração igual àquele descrito no enunciado,
@@ -167,8 +158,6 @@ Para mais informações sobre LATEX consultar o
 
   \item Cliente:
   \begin{itemize}
-    \item A aplicação é composta por dois executáveis, \texttt{server} e \texttt{client}
-    (que correspondem a \texttt{sdstore} e \texttt{sdstored}, resp.).
     \item Tal como pedido no enunciado, o cliente pode submeter pedidos de transformação
     de ficheiros, com uma prioridade associada. A prioridade pode ser qualquer não negativo.
     \item O cliente também pode, através do comando \texttt{./client status}, ver quais são as
@@ -384,27 +373,80 @@ O comando \lstinline{unlink(SERVER)} previnirá mais clientes de fazer novos ped
 \subsection{Prioridades de pedidos de processamento}
 
 Como referido anteriormente, usa-se uma implementação de "\textit{priority queues}"~\ref{footnote:pqueue} em C
-para decidir a ordem de execução dos pedidos.\\
+para decidir a ordem de execução dos pedidos.
 
 Note-se que pedidos com a mesma prioridade não têm distinção, e o processo de escolha é não-determinístico.
 
 \chapter{Testes realizados e Resultados} \label{chap:bash_testes} %capitulo e referencia cruzada
 
-Para testar a aplicação, utilizaram-se as seguintes ferramentas:
+Para desenvolver e testar a aplicação, utilizaram-se as seguintes ferramentas:
 
 \begin{itemize}
+  \item Cmake: \url{https://cmake.org/}
   \item Tmux: \url{https://en.wikipedia.org/wiki/Tmux}
-  \item Tmuxinator: https://github.com/tmuxinator/tmuxinator
+  \item Tmuxinator: \url{https://github.com/tmuxinator/tmuxinator}
+  \item Git: \url{https://git-scm.com/}
 \end{itemize}
 
 O Tmuxinator utiliza configurações YAML (ver exemplos em anexo) que especificam cenários
 de teste concretos, que depois podem ser executados através de scripts Bash que compilam
-o projeto, criam ficheiros de teste e depois executam os programas.
+o projeto~\ref{code:compile_sh}, criam ficheiros de teste e depois executam os programas~\ref{code:test_sh}.\\
+
+Para exemplificar, veja-se como obter, construir, e testar e.g. a concorrência do servidor (há outros cenários).
+Assume-se que todas as ferramentas mencionadas estão instaladas e disponíveis no \texttt{PATH}.
+
+\lstset{language=bash,
+  basicstyle=\small, % print whole listing small
+  keywordstyle=\color{pink}\bfseries\underbar,
+  % underlined bold black keywords
+  identifierstyle={\color{purple}},%
+  commentstyle=\color{red}, % brown comments
+  showstringspaces=true,
+  % Without this it is not possible to have bash dollar signs inside \lstlisting.
+  escapeinside=||
+}
+\begin{lstlisting}
+git clone https://github.com/Alef-Keuffer/SDStore/
+cd SDStore
+chmod +x ./compile.sh
+./compile.sh
+cd tests
+chmod +x ./test.sh
+./test.sh conc
+\end{lstlisting}
+
+Para ver os testes disponíveis, ver~\ref{code:tmuxinator}.
 
 \chapter{Conclusão} \label{concl}
-Síntese do Documento~\cite{araujo:2018,martini:2018}.\\
-Estado final do projecto; Análise crítica dos resultados~\cite{Sto77a}.\\
-Trabalho futuro.
+
+Conclui-se desta forma a apresentação do Projeto Prático de \so do Grupo 20 para o
+ano letivo 2021/2022.
+
+\section{Comentários}
+
+Terminar o projeto foi gratificante e transmitiu aos autores informação sobre como
+arquitetar, estruturar e implementar pequenos programas em C que fazem uso de "\textit{system calls}".\\
+
+No entanto, embora o Professor Paulo Almeida tenha dito, várias vezes e em tom humoroso, que o
+trabalho se completaria numa tarde, os autores discordam.\\
+
+Embora o projeto não chegue a ter 1000 LOC em C, e algumas centenas em \texttt{YAML/Bash},
+foi completamente não-trivial projetar as aplicações servidor/cliente tendo em conta as restrições
+impostas (comunicação através de FIFOs, pequeno conjunto de syscalls permissíveis, etc), e a novidade do
+paradigma concorrente, que acrescenta os seus problemas \textemdash memória partilhada, sincronização,
+limites de concorrência do servidor \textemdash e, cujas estratégias de abordagem não são abordados na parte
+teórica da disciplina, e só parcialmente na parte prática.\\
+
+Acresça-se a isto as dificuldades inerentes a "\textit{debugging}" em C, e todas as idiossincrasias da
+linguagem, e este projeto foi facilmente o mais difícil que os autores completaram durante o curso inteiro.
+
+\section{Trabalho Futuro}
+
+Este projeto foi escrito num contexto académico, e não terá qualquer uso futuro adicional.
+
+Se tivesse, a primeira necessidade seria melhor "\textit{error handling}".
+Por exemplo, o servidor termina prematuramente se receber um pedido de uma transformação que
+não exista.
 
 \appendix % apendice
 \chapter{Excertos de Código Utilizado no Projeto}
@@ -420,7 +462,7 @@ Trabalho futuro.
 }
 
 \label{code:task_struct}
-\begin{lstlisting}[caption={Estrutura para pedidos de processamento de ficheiros}]
+\begin{lstlisting}[language=bash, caption={Estrutura para pedidos de processamento de ficheiros}]
     typedef struct task_t {
       size_t pos; //private
       pqueue_pri_t pri;
@@ -455,6 +497,155 @@ Trabalho futuro.
   };
 \end{lstlisting}
 
+\lstset{language=bash,%language=YAML, YAML is not supported!
+  basicstyle=\small, % print whole listing small
+  keywordstyle=\color{cyan}\bfseries\underbar,
+  % underlined bold black keywords
+  identifierstyle={\color{blue}},%
+  commentstyle=\color{purple}, % brown comments
+  showstringspaces=true,
+  % Without this it is not possible to have bash dollar signs inside \lstlisting.
+  escapeinside=||
+}
+
+\label{code:compile_sh}
+\begin{lstlisting}[caption={Script Bash de compilação}]
+  #!/bin/bash
+
+  # Build SDStore executables, and return to project root.
+  # Using subshell to avoid having to cd ..
+  # https://www.shellcheck.net/wiki/SC2103
+  (
+      cd ./bin/sdstore-transformations || return;
+      make clean;
+      make;
+  )
+  
+  # Build the project executables, and return to project's root.
+  # Subshell, same as above.
+  
+  # If IDE cmake is working, this step may be skipped.
+  mkdir -p build
+  #cmake --build ./build --config Release --target all -j 18 --
+  
+  rm -f tests/server
+  rm -f tests/client
+  cp build/server tests
+  cp build/client tests
+  
+  cp ./etc/sdstored.conf tests/sdstored.conf
+  
+  mkdir -p tests/bin
+  cp -r ./bin/sdstore-transformations/* ./tests/bin/
+  
+\end{lstlisting}
+
+\label{code:test_sh}
+\begin{lstlisting}[caption={Script Bash de teste}]
+  #!/bin/bash
+
+  # How many test files to generate, both input and output.
+  num_files=5
+  
+  # Size of each input file. Should be 10M+ to create scenarios with interesting delay.
+  file_size="100M"
+  
+  for ((i=1;i<=num_files;i++)); do
+      rm -f filein"|\$|i";
+      rm -f fileout"|\$|i";
+  done
+  
+  for ((i=1;i<=num_files;i++)); do
+      head -c |\$|file_size </dev/urandom >filein"|\$|i";
+      touch fileout"|\$|i";
+  done
+  
+  # Argument passed to bash script dictates what test to run
+  if [ "|\$|1" == "conc" ]; then
+      tmuxinator start -p concurrency.yml
+  elif [ "|\$|1" == "prio" ]; then
+      tmuxinator start -p priority.yml;
+  elif [ "|\$|1" == "status" ]; then
+      tmuxinator start -p status.yml;
+  elif [ "|\$|1" == "impossible" ]; then
+      tmuxinator start -p impossible.yml;
+  elif [ "|\$|1" == "ctrl_c" ]; then
+      tmuxinator start -p ctrl_c.yml;
+  else
+    echo "Unknown test parameter! Please rerun with an appropriate argument."
+  fi
+\end{lstlisting}
+
+
+\label{code:tmuxinator}
+\begin{lstlisting}[caption={Exemplo de configurações Tmuxinator}]
+  name: concurrency
+
+  
+  windows:
+    - concurrency_and_limit:
+        panes:
+          - ./server sdstored.conf bin/
+          - sleep 1; ./client proc-file 1 filein1 fileout1 bcompress bdecompress
+          - sleep 1; ./client proc-file 1 filein2 fileout2 bcompress bdecompress
+          - sleep 1; ./client proc-file 1 filein3 fileout3 bcompress bdecompress
+
+  name: ctrl_c
+
+  windows:
+    - priority:
+        panes:
+          - ./server sdstored.conf bin/
+          - sleep 1; ./client proc-file 1 filein1 fileout1 bcompress bcompress nop nop nop nop nop nop
+          - sleep 1; ./client proc-file 3 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress
+          - sleep 2; ./client status; |\\| echo -e |\colorbox{blue!50}{CTRL\textasciicircum C IN SERVER}|;|\\| echo -e |\colorbox{pink!50}{``RUN ./client proc-file 1 filein1 fileout1 bcompress bcompress nop nop nop nop nop nop''}|
+
+  name: priority
+
+  # Resultado esperado: que o primeiro pedido bloqueie os outros, e que
+  # o pedido com prioridade mais alta, feito no fim, corra em segundo lugar.
+  windows:
+    - priority:
+        panes:
+          - ./server sdstored.conf bin/
+          - sleep 1; ./client proc-file 1 filein1 fileout1 nop nop nop nop nop nop bcompress
+          - sleep 2; ./client proc-file 3 filein2 fileout2 nop bcompress gcompress gcompress
+          - sleep 3; ./client proc-file 5 filein3 fileout3 nop bcompress gcompress gcompress
+
+  name: impossible
+
+  # Resultado esperado: que o servidor recuse o pedido por exceder os
+  # limites de concorrencia para o comando gcompress.
+  windows:
+    - priority:
+        panes:
+          - ./server sdstored.conf bin/
+          - sleep 2; ./client proc-file 1 filein1 fileout1 gcompress gcompress gcompress gcompress
+
+  name: status
+
+  # Resultado esperado: que o servidor mostre a segunte informacao.
+  # [...] Message sent to 'SERVER'
+  # Number of active tasks: 2
+  # task [pid=...]: proc-file 1 filein1 fileout1 nop nop bcompress encrypt decrypt bdecompress
+  # task [pid=...]: proc-file 1 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress
+  # transf nop: 2/6 (running/max)
+  # transf bcompress: 2/4 (running/max)
+  # transf bdecompress: 2/4 (running/max)
+  # transf encrypt: 2/3 (running/max)
+  # transf decrypt: 2/3 (running/max)
+  # transf gcompress: 1/2 (running/max)
+  # transf gdecompress: 1/2 (running/max)
+  # [...] Unlinked ...
+  windows:
+    - priority:
+        panes:
+          - ./server sdstored.conf bin/
+          - sleep 1; ./client proc-file 1 filein1 fileout1 nop nop bcompress encrypt decrypt bdecompress
+          - sleep 1; ./client proc-file 1 filein2 fileout2 bcompress gcompress encrypt decrypt gdecompress bdecompress
+          - sleep 2; ./client status
+\end{lstlisting}
+
 \newpage
 
 %-- Fim do documento -- inserção das referencias bibliográficas
@@ -466,4 +657,4 @@ Trabalho futuro.
 
 \bibliography{bibLayout} %input do ficheiro de referencias bibliograficas
 
-\end{document} 
+\end{document}
