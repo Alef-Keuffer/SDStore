@@ -337,9 +337,16 @@ faz-se somente \lstinline{lseek(fd, 0, SEEK_END)} para cada ficheiro.
 
 \subsection{Terminação graciosa de servidor}
 Para terminar de forma graciosa com \lstinline{SIGTERM/SIGQUIT}, executa-se, em cada processo monitor,
-o código \lstinline{signal (SIGINT, SIG_IGN); signal (SIGTERM, SIG_IGN);}.\\
+o código
+
+\begin{lstlisting}
+  signal (SIGINT, SIG_IGN);
+  signal (SIGTERM, SIG_IGN);
+\end{lstlisting}
+
 Caso contrário, \lstinline{CTRL^C} também os terminará \textemdash monitores são obtidos através de
-\lstinline{fork()} do servidor, herdando o seu tratamento de sinais. \textemdash.\\
+\lstinline{fork()} do servidor, herdando o seu tratamento de sinais.\\
+
 No servidor, faz-se
 
 \lstset{language=C,
