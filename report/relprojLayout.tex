@@ -125,6 +125,9 @@ A estrutura do relatório é a seguinte:
 
 \item No capítulo~\ref{chap:servidor} explicam-se alguns aspetos mais técnicos e concretos da implementação.
 
+\item No capítulo~\ref{chap:disc} está um breve comentário a justificar algumas decisões tomadas
+ao longo da implementação.
+
 \item No capítulo~\ref{chap:bash_testes}, explica-se como compilar, executar e testar o projeto.
 
 \item No capítulo~\ref{concl} termina-se o relatório com as conclusões e o trabalho futuro.
@@ -292,13 +295,6 @@ da aplicação.
   \item O servidor faz, essencialmente, um ciclo \lstinline{while(1) read(fifo);}.
   \item O servidor guarda os pedidos em execução numa lista, e utiliza "\lstinline{arrays}" para armazenar
   os limites de cada transformação, assim como o número de transformações em execução: ver anexo~\ref{code:server_struct}.
-  \item Durante o desenvolvimento do projeto, consideraram-se alternativas que fariam os monitores enviar
-  sinais ao servidor aquando do término da sua execução, para ser poder fazer \lstinline{waitpid(...)}, colher
-  o processo monitor, e libertar os filtros em uso.\\
-  \\
-  No entanto, optou-se contra esta solução devido aos problemas de não-determinismo envolvidos no tratamento de sinais
-  e.g. dois processos terminam exatamente ao mesmo tempo, só haverá um desses sinais na fila do servidor, só se fará
-  \lstinline{wait} uma vez, etc.
   \item O servidor usa uma "\textit{priority queue}"\footnote{implementação disponível em \url{https://github.com/vy/libpqueue}}\label{footnote:pqueue}
   para guardar os pedidos que lê do FIFO global.
   \item Após cada monitor terminar e escrever no FIFO global que já o fez, o servidor lê essa mensagem do FIFO
@@ -384,7 +380,30 @@ para decidir a ordem de execução dos pedidos.
 
 Note-se que pedidos com a mesma prioridade não têm distinção, e o processo de escolha é não-determinístico.
 
-\chapter{Testes realizados e Resultados} \label{chap:bash_testes} %capitulo e referencia cruzada
+{\let\clearpage\relax \chapter{Discussão} \label{chap:disc} } %capitulo e referencia cruzada
+
+\section{Utilização de sinais por monitores}
+
+Durante o desenvolvimento do projeto, consideraram-se alternativas que, em vez de ter os monitores a fazer
+escritas para o FIFO global, os fariam enviar sinais e.g. \texttt{SIGUSR1/SIGUSR2} ao servidor aquando do
+término da sua execução, para ser poder fazer \lstinline{waitpid(...)}, colher o processo monitor, e libertar
+os filtros em uso.\\
+
+No entanto, optou-se contra esta solução devido aos problemas de não-determinismo envolvidos no tratamento de sinais
+e.g. basta considerar o caso em que dois processos terminam exatamente ao mesmo tempo, donde só haverá um desses
+sinais na fila do servidor, só se fará \lstinline{wait} uma vez, não se atualizará corretamente os limites de
+concorrência, etc.
+
+\section{Prioridades na fila de pedidos}
+
+Neste momento não se procura evitar "\textit{starvation}" de pedidos de prioridade baixa, que serão continuamente
+ultrapassados por pedidos de prioridade maior.
+
+Considerou-se implementar uma noção de "\textit{aging}" que, a cada inserção na fila, aumentaria gradualmente
+a prioridade dos pedidos mais antigos. No entanto, não se justificou o investimento de tempo dado o prazo
+de entrega limitado.
+
+{\let\clearpage\relax \chapter{Testes realizados e Resultados} \label{chap:bash_testes} } %capitulo e referencia cruzada
 
 Para desenvolver e testar a aplicação, utilizaram-se as seguintes ferramentas:
 
@@ -424,7 +443,7 @@ chmod +x ./test.sh
 
 Para ver os testes disponíveis, ver~\ref{code:tmuxinator}.
 
-\chapter{Conclusão} \label{concl}
+{\let\clearpage\relax \chapter{Conclusão} \label{concl} }
 
 Conclui-se desta forma a apresentação do Projeto Prático de \so do Grupo 20 para o
 ano letivo 2021/2022.
@@ -437,7 +456,7 @@ arquitetar, estruturar e implementar pequenos programas em C que fazem uso de "\
 No entanto, embora o Professor Paulo Almeida tenha dito, várias vezes e em tom humoroso, que o
 trabalho se completaria numa tarde, os autores discordam.\\
 
-Embora o projeto não chegue a ter 1000 LOC em C, e algumas centenas em \texttt{YAML/Bash},
+Apesar de o projeto não chegar a ter 1000 LOC de C, e algumas centenas em \texttt{YAML/Bash},
 foi completamente não-trivial projetar as aplicações servidor/cliente tendo em conta as restrições
 impostas (comunicação através de FIFOs, pequeno conjunto de syscalls permissíveis, etc), e a novidade do
 paradigma concorrente, que acrescenta os seus problemas \textemdash memória partilhada, sincronização,
@@ -454,6 +473,9 @@ Este projeto foi escrito num contexto académico, e não terá qualquer uso futu
 Se tivesse, a primeira necessidade seria melhor "\textit{error handling}".
 Por exemplo, o servidor termina prematuramente se receber um pedido de uma transformação que
 não exista.
+
+Outra possibilidade seria implementar a noção de "\textit{aging}" referida em ~\ref{chap:disc}, para evitar
+"\textit{starvation}" de pedidos de baixa prioridade.
 
 \appendix % apendice
 \chapter{Excertos de Código Utilizado no Projeto}
