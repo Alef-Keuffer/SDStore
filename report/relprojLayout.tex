@@ -371,14 +371,15 @@ No servidor, faz-se
   sigaction (SIGTERM, &sa, NULL);
 \end{lstlisting}
 
-O comando \lstinline{unlink(SERVER)} previnirá mais clientes de fazer novos pedidos para o FIFO global.
+O comando \lstinline{unlink(SERVER)} prevenirá mais clientes de fazer novos pedidos para o FIFO global.
 
 \subsection{Prioridades de pedidos de processamento}
 
 Como referido anteriormente, usa-se uma implementação de "\textit{priority queues}"~\ref{footnote:pqueue} em C
 para decidir a ordem de execução dos pedidos.
 
-Note-se que pedidos com a mesma prioridade não têm distinção, e o processo de escolha é não-determinístico.
+Note-se que pedidos com a mesma prioridade não têm distinção, e o processo de escolha é determinístico,
+mas "\lstinline|undefined|".
 
 {\let\clearpage\relax \chapter{Discussão} \label{chap:disc} } %capitulo e referencia cruzada
 
